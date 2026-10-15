@@ -57,8 +57,8 @@ settings included. Open one, check the filament and sheet, and print.
 | `test_fit_band_tpu.3mf` | TPU | 44 min | 7 g | Print first. The front 6 mm of the bumper: checks outline, corners, lip, buttons, ports |
 | `test_camera_petg.3mf` | PETG | 19 min | 4 g | Top of the plate: checks the camera collar |
 | `bumper_tpu.3mf` | TPU | 1 h 26 min | 13 g | |
-| `plate_petg.3mf` | PETG | 1 h 11 min | 21 g | One colour, e.g. Galaxy Black |
-| `plate_petg_2color.3mf` | PETG | 1 h 11 min | 21 g | Pauses (M600) at 1.40 mm: base layers in clear, map and collar in Galaxy Black. The clear lowlands show the Hazel phone through |
+| `plate_petg.3mf` | PETG | 1 h 12 min | 21 g | One colour, e.g. Galaxy Black |
+| `plate_petg_2color.3mf` | PETG | 1 h 12 min | 21 g | Pauses (M600) at 1.40 mm: base layers in clear, map and collar in Galaxy Black. The clear lowlands show the Hazel phone through |
 
 The times are PrusaSlicer 2.9.6 estimates for an Original Prusa MK3S+ with a 0.6
 mm nozzle. Plain STLs are next to the projects, and the settings are also in
@@ -78,6 +78,8 @@ mm nozzle. Plain STLs are next to the projects, and the settings are also in
   plate prints inner-face-down, so the sheet sets the finish on the plate's
   inside face.
 - **No supports** on either part.
+- **Enclosure**: leave it open or vented. Neither material needs the heat, and
+  a warm enclosure can cause heat creep with TPU on the MK3S.
 
 ## Assembly
 
@@ -94,8 +96,8 @@ mm nozzle. Plain STLs are next to the projects, and the settings are also in
 The phone model in `case/params.py` uses Google's published size, plus
 positions measured from ten published Pixel 9 Pro XL cases. One of those cases
 came with its author's caliper measurements, and one claims to be built from
-Google's own CAD. Most values agree within 0.5 mm; each one in the file lists the
-range found. **[MEASURE.md](MEASURE.md)** is a 15-item caliper checklist and
+Google's own CAD. Most positions agree within about 1 mm, and the file lists the
+range found next to each value. **[MEASURE.md](MEASURE.md)** is a 15-item caliper checklist and
 explains how to use the two test prints.
 
 ## Changing the design

@@ -37,6 +37,8 @@ and ports. Push it onto the phone from the screen side and check:
 - each button sits in the middle of its opening, with no rub at either end
 - the USB-C, speaker and microphone holes line up with the phone's holes
 - the lip covers only the black border of the screen, not the picture
+- the earpiece (the slit along the top edge of the screen) is not blocked;
+  make a quick call to check (the reference cases do not notch it)
 
 Then print `out/print/test_camera.stl` (PETG, top of the plate). Lay it on the
 back of the phone: the camera bar should sit centred in the collar, with

@@ -95,7 +95,7 @@ class Case:
     collar_wall: float = 1.5
     collar_guard: float = 1.0  # collar stands this far above the camera glass
     collar_chamfer: float = 0.6  # inner top bevel, keeps flash glare off the lenses
-    collar_fillet: float = 0.6  # outer top edge
+    collar_fillet: float = 0.4  # outer top edge
 
     # --- cut-outs -----------------------------------------------------------------
     btn_margin: float = 1.5  # opening extends past each end of a button

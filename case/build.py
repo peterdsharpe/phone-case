@@ -40,6 +40,7 @@ PETG = dict(
     print="0.15mm DETAIL @0.6 nozzle MK3", filament="Prusament PETG @0.6 nozzle",
     overrides=dict(
         perimeters=2, perimeter_generator="arachne", top_solid_layers=5, bottom_solid_layers=4,
+        fill_density="100%", fill_pattern="rectilinear",  # solid: stiff, and no infill pattern behind clear PETG
         temperature=250, first_layer_temperature=250,  # +10 C for hardened steel at 0.6 flow
         top_fill_pattern="monotonic", seam_position="rear", skirts=1, skirt_distance=3,
         brim_width=0, support_material=0,
