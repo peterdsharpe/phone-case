@@ -31,7 +31,8 @@ def plate_blank(p: Phone, c: Case, grow: float = 0.0) -> bd.Part:
 
 
 def plate(p: Phone = PHONE, c: Case = CASE, relief=None) -> bd.Part:
-    """The back plate. `relief` is a list of shapely (Multi)Polygons, one per terrace level."""
+    """The back plate. `relief` is a list of (shapely geometry, height) layers, stacked
+    outward from the plate face in order; each must sit within the one below."""
     body = plate_blank(p, c)
 
     cl, ch = collar_size(p, c)
@@ -42,12 +43,13 @@ def plate(p: Phone = PHONE, c: Case = CASE, relief=None) -> bd.Part:
 
     if relief:
         z = -c.plate_t
-        for level in relief:
-            polys = list(getattr(level, "geoms", [level]))
-            for poly in polys:
+        for geom, h in relief:
+            for poly in getattr(geom, "geoms", [geom]):
+                if poly.geom_type != "Polygon" or poly.is_empty:
+                    continue
                 face = face_from_polygon(poly)
-                body = body + bd.Pos(0, 0, z + 0.01) * bd.extrude(face, c.topo_step + 0.01, dir=(0, 0, -1))
-            z -= c.topo_step
+                body = body + bd.Pos(0, 0, z + 0.01) * bd.extrude(face, h + 0.01, dir=(0, 0, -1))
+            z -= h
 
     # Camera opening, with a 45-degree bevel on the collar's inner top edge (anti-glare).
     hl, hh = p.cam_len + 2 * c.collar_clear, p.cam_h + 2 * c.collar_clear

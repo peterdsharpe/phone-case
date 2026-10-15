@@ -7,22 +7,23 @@ out/renders (PNG), and out/REPORT.md (sizes, masses, print times).
 from __future__ import annotations
 
 import argparse
-import math
 import pathlib
 import time
 
 import build123d as bd
+import numpy as np
+import shapely
 
 from . import slicer, topo
 from .bumper import bumper
 from .geom import outline_shp, stadium_shp
 from .params import CASE, PHONE, Case, Phone
-from .phone import phone_parts, phone_solid
+from .phone import phone_solid
 from .plate import collar_size, plate
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
-DENSITY = {"TPU": 1.21, "PETG": 1.27}  # g/cm^3
+DENSITY = {"TPU": 1.21, "PETG": 1.27, "PLA": 1.24}  # g/cm^3
 
 # Print settings on top of Prusa's presets (MK3S+, 0.6 mm hardened-steel nozzle).
 TPU = dict(
@@ -33,7 +34,13 @@ TPU = dict(
         fill_density="25%", fill_pattern="gyroid", top_solid_layers=4, bottom_solid_layers=4,
         temperature=245, first_layer_temperature=245,  # +5 C for hardened steel
         filament_max_volumetric_speed=2.0, avoid_crossing_perimeters=1, thick_bridges=1,
-        seam_position="rear", skirts=1, skirt_distance=3, brim_width=0, support_material=0,
+        skirts=1, skirt_distance=3, brim_width=0, support_material=0,
+        # Looks: 0.15 mm layers smooth the 45-degree lip and the rim fillet for ~2 min more (TPU
+        # prints at its flow limit, so thinner layers barely slow it); concentric lines follow the
+        # outline on the lip and rim faces instead of crossing the corners diagonally; scarf seams
+        # ramp the outer wall's seam in where the contour is smooth.
+        layer_height=0.15, first_layer_height=0.2, top_fill_pattern="concentric", bottom_fill_pattern="concentric",
+        seam_position="aligned", scarf_seam_placement="contours", scarf_seam_only_on_smooth=1,
     ),
 )
 PETG = dict(
@@ -46,15 +53,29 @@ PETG = dict(
         brim_width=0, support_material=0,
     ),
 )
+# PLA plate, for the streamline layer's bright palette. +10 C for hardened steel, as for PETG.
+PLA = dict(PETG, filament="Prusament PLA", overrides=dict(PETG["overrides"], temperature=225, first_layer_temperature=225))
 
 
 def relief(p: Phone, c: Case):
-    if not c.topo_source:
+    """Relief layers [(geometry, height), ...] for the chosen design, and the region they fill."""
+    if c.design == "none":
         return None, None
     cl, ch = collar_size(p, c)
-    region = outline_shp(p, c.flange_reach + c.topo_margin).difference(
-        stadium_shp(cl + 2 * c.topo_collar_margin, ch + 2 * c.topo_collar_margin, 0, p.cam_y))
-    return topo.terraces(c.topo_source, region, c.topo_levels, c.topo_min_feature), region
+    collar_keepout = stadium_shp(cl + 2 * c.relief_collar_margin, ch + 2 * c.relief_collar_margin, 0, p.cam_y)
+    region = outline_shp(p, c.flange_reach + c.relief_margin).difference(collar_keepout)
+    if c.design == "streamlines":  # flat plate; the pattern is a toolpath layer added to the G-code
+        return None, region
+    if c.design == "topo":
+        levels = topo.terraces(c.topo_source, region, c.topo_levels, c.min_feature)
+        return [(g, c.topo_step) for g in levels], region
+    if c.design == "karman":
+        from . import flow
+
+        top_strip = region.intersection(shapely.box(-50, p.cam_y, 50, 100))
+        dye, cyl = flow.relief(region, width=c.flow_ridge_w, min_feature=c.min_feature, top_strip=top_strip)
+        return [(dye.union(cyl), c.flow_ridge_h), (cyl, c.flow_cyl_h)], region
+    raise ValueError(f"unknown design {c.design!r}")
 
 
 def to_print_bumper(part: bd.Part, p: Phone, c: Case) -> bd.Part:
@@ -83,7 +104,7 @@ def mass_g(part, material: str) -> float:
     return part.volume / 1000 * DENSITY[material]
 
 
-def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None) -> dict[str, str]:
+def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None, ranges=None) -> dict[str, str]:
     """PrusaSlicer project (.3mf with settings) next to the STL; slice it to verify; return stats."""
     cfg = slicer.config(spec["print"], spec["filament"], spec["overrides"])
     ini = OUT / "profiles" / f"{name}.ini"
@@ -96,6 +117,8 @@ def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None) -> 
     slicer.embed_config(proj, cfg)
     if events:
         slicer.add_custom_gcode(proj, events)
+    if ranges:
+        slicer.add_layer_ranges(proj, ranges)
     gdir = OUT / "gcode"
     gdir.mkdir(exist_ok=True)
     gcode = gdir / f"{name}.gcode"
@@ -110,6 +133,49 @@ def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None) -> 
     return stats
 
 
+def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "petg"):
+    """Slice the flat plate, then splice in the streamline layer (see case/toolpath.py).
+    Returns the slicer stats, the report section, the layer and its colour bands."""
+    from . import streamplate, toolpath
+
+    spec = dict(spec, overrides=dict(spec["overrides"], first_layer_height=c.base_layer))
+    n_base = round(c.plate_t / c.base_layer)
+    assert abs(n_base * c.base_layer - c.plate_t) < 1e-6, "plate_t must be a whole number of base layers"
+    z_top = round(c.plate_t + c.stream_h, 4)
+    ranges = [(c.base_layer, c.plate_t, c.base_layer), (c.plate_t, z_top, c.stream_h)]
+    stats = make_project(OUT / "print" / "plate.stl", spec, f"plate_{tag}", ranges=ranges)
+    cfg = slicer.config(spec["print"], spec["filament"], spec["overrides"])
+    em = float(str(cfg.get("extrusion_multiplier", "1")).split(",")[0])
+    lyr = streamplate.layer(p, c, region, em=em)
+    to_bed = streamplate.bed_transform(OUT / "print" / "plate.stl")
+    out = OUT / "print" / f"plate_streamlines_{tag}.gcode"
+    info = toolpath.splice(OUT / "gcode" / f"plate_{tag}.gcode", out, lyr, to_bed, toolpath.Machine.from_config(cfg))
+    length = sum(float(np.hypot(*np.diff(l, axis=0).T).sum()) for l in lyr.lines)
+    cov = streamplate.coverage(lyr, region.buffer(-0.3))
+    bands = toolpath.bands(lyr, c.stream_bands)
+    minutes = info["minutes"]
+    note(f"streamline layer ({tag}): {len(lyr.lines)} lines, {length / 1000:.1f} m, {info['filament_mm']:.0f} mm of filament, "
+         f"coverage {cov:.1%}, {info['travel_m']:.1f} m of travel, peak flow {info['peak_mm3_s']:.1f} mm^3/s, "
+         f"about {minutes:.0f} min")
+    report = [
+        "## Streamline layer", "",
+        f"`out/print/plate_streamlines_{tag}.gcode` is the plate's G-code with the streamline layer spliced in at "
+        f"z = {lyr.z:g} mm ({lyr.h:g} mm thick): {len(lyr.lines)} lines, {length / 1000:.1f} m of path, "
+        f"{info['filament_mm']:.0f} mm of filament, about {minutes:.0f} min. Coverage {cov:.1%}.", "",
+        "Cut list (equal stream-function bands, in print order). Add about 30 mm to the first piece for the "
+        "purge and 80 mm to the last so the extruder can still grip it:", "",
+        "| piece | filament (mm) | PETG plate | PLA plate |", "|---|---|---|---|",
+        *[f"| {k + 1} | {mm:.0f} | {toolpath.PALETTES['petg'][2][k % 4][0]} | {toolpath.PALETTES['pla_gold'][2][k % 4][0]} |"
+          for k, (_, _, mm) in enumerate(bands)],
+    ]
+    stats = dict(stats)
+    g_layer = info["filament_mm"] * toolpath.A_FIL / 1000 * DENSITY[tag.upper()]
+    stats["grams"] = f"{float(stats.get('grams', 0)) + g_layer:.2f}"
+    stats["M600"] = str(int(stats.get("M600", "0")) + 2)
+    stats["time"] = f"{stats.get('time', '?')} + ~{minutes:.0f} min"
+    return stats, report, lyr, bands
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-slice", action="store_true")
@@ -120,6 +186,8 @@ def main(argv=None):
         (OUT / d).mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     log = []
+    stream_report: list[str] = []
+    stream = None  # (layer, bands) for the streamline design
 
     def note(msg):
         print(msg, flush=True)
@@ -135,7 +203,7 @@ def main(argv=None):
     clash = {"bumper/phone": (b & ph).volume, "plate/phone": (pl & ph).volume, "bumper/plate": (b & pl).volume}
     note(f"geometry built in {time.time() - t0:.0f} s; overlaps (mm^3): " + ", ".join(f"{k} {v:.3f}" for k, v in clash.items()))
     if levels:
-        topo.save_preview(levels, region, str(OUT / "renders" / "topo_map.png"))
+        topo.save_preview([g for g, _ in levels], region, str(OUT / "renders" / "relief_map.png"))
 
     # Fit tests: the front of the bumper, and the camera end of the plate.
     band = b & box_above(4.0)
@@ -166,10 +234,19 @@ def main(argv=None):
         if args.no_slice:
             rows.append(base)
             continue
+        if nm == "plate" and c.design == "streamlines":
+            stats, stream_report, lyr, bands = streamline_plate(p, c, region, spec, note)
+            stream = (lyr, bands)
+            rows.append(base | stats)
+            # The bright palette (gold, red, white, clear PLA) needs a PLA plate: PLA does not
+            # bond to PETG. PLA softens near 55 C, so PETG stays the default.
+            pla_stats, *_ = streamline_plate(p, c, region, PLA, note, tag="pla")
+            rows.append(base | dict(part="plate (PLA option)", material="PLA", model_g=f"{mass_g(part, 'PLA'):.1f}") | pla_stats)
+            continue
         rows.append(base | make_project(OUT / "print" / f"{nm}.stl", spec, f"{nm}_{mat.lower()}"))
         if nm == "plate" and levels:
             # Two-colour variant: base layers in one filament, terraces + collar in another.
-            z_change = round(c.plate_t + c.two_color_level * c.topo_step, 2)
+            z_change = round(c.plate_t + c.two_color_level * c.plate_layer, 2)
             rows.append(base | dict(part="plate, two-colour") |
                         make_project(OUT / "print" / "plate.stl", spec, "plate_petg_2color",
                                      events=[(z_change, "color", "#1c1d24")]))
@@ -179,6 +256,15 @@ def main(argv=None):
         from .figures import render_all
 
         render_all(b, pl, p, c, OUT / "renders")
+        if stream:
+            from .figures import streamline_previews, streamline_renders
+            from .streamflow import wake
+
+            lyr, bands = stream
+            r = wake(p, c)
+            flow = (r["xs"], r["ys"], r["shots"][c.stream_phase])
+            streamline_previews(lyr, region, bands, p, c, OUT / "renders", flow=flow)
+            streamline_renders(lyr, bands, b, pl, p, c, OUT / "renders")
         note(f"rendered at {time.time() - t0:.0f} s")
 
     # --- report -------------------------------------------------------------------
@@ -188,7 +274,10 @@ def main(argv=None):
     for r in rows:
         lines.append(f"| {r['part']} | {r['material']} | {r['model_g']} | {r['size']} | {r.get('time', '-')} | {r.get('grams', '-')} | {r.get('M600', '-')} |")
     lines += ["", "Overlap check (mm^3, should be 0): " + ", ".join(f"{k} {v:.3f}" for k, v in clash.items()), ""]
-    lines += ["Topography: " + (c.topo_source or "none") + (f", {len(levels)} terraces of {c.topo_step} mm" if levels else "")]
+    if stream_report:
+        lines += stream_report + [""]
+    lines += [f"Relief: {c.design}" + (f" ({c.topo_source})" if c.design == "topo" else "")
+              + (f", {len(levels)} layers, {sum(h for _, h in levels):.2f} mm tall" if levels else "")]
     (OUT / "REPORT.md").write_text("\n".join(lines) + "\n")
     note(f"done in {time.time() - t0:.0f} s")
 

@@ -6,17 +6,18 @@ replace. It has two parts:
 
 - **Bumper (TPU)**: side walls, front lip, thick corners with air pockets, and
   a rear rim that holds the plate in. It takes the hits and wears out first.
-- **Back plate (PETG)**: covers the back glass, has the raised camera collar
-  built in, and has a terraced topographic map of Mount Rainier on its face.
-  Each terrace is one 0.15 mm print layer, so the layer lines are the contour
-  lines.
+- **Back plate (PETG)**: covers the back glass and has the raised camera collar
+  built in. Its visible face is one extra print layer whose lines follow the
+  streamlines of air flowing past the camera collar, from a lattice-Boltzmann
+  simulation of the wake. Feed the extruder short pieces of different colours
+  and the colours run along the flow, like dye in a water tunnel.
 
-![Back, single colour](out/renders/back_galaxy.png)
+![Back, PETG palette](out/renders/stream_back_petg.png)
 
 | | |
 |---|---|
-| ![Two-colour plate](out/renders/back_twotone.png) | ![Front](out/renders/front.png) |
-| ![Camera collar](out/renders/camera_closeup.png) | ![Corner and power button](out/renders/corner_closeup.png) |
+| ![Back, PLA palette](out/renders/stream_back_pla_gold.png) | ![Front](out/renders/front.png) |
+| ![Collar and the flow parting around it](out/renders/stream_collar_closeup.png) | ![Vortex core, raking light](out/renders/stream_wake_closeup.png) |
 
 ## Why two parts
 
@@ -24,9 +25,9 @@ The camera bar stands 3.6 mm proud of the back glass. In a one-piece case
 printed back-down, a raised collar around it would need support under the whole
 back. The popular one-piece TPU cases avoid that with a flat back about 4 mm
 thick, which makes the phone 14–15 mm thick and puts the wireless charger 4 mm
-away. Printing the plate face-up instead lets the collar and the map grow
-upward with no support. The back stays 1.25 mm thick (up to 2.15 mm at the map's
-peaks), so Qi pads still work.
+away. Printing the plate face-up instead lets the collar grow upward with no
+support. The back is 1.5 mm thick (1.25 mm under the rim), so Qi pads still
+work.
 
 The plate isn't bonded to the TPU. The rim's 45° underside closes over the
 plate's bevelled edge, and the phone presses the plate against it. TPU–PETG
@@ -54,11 +55,12 @@ settings included. Open one, check the filament and sheet, and print.
 
 | File | Material | Time | Filament | Notes |
 |---|---|---|---|---|
-| `test_fit_band_tpu.3mf` | TPU | 44 min | 7 g | Print first. The front 6 mm of the bumper: checks outline, corners, lip, buttons, ports |
-| `test_camera_petg.3mf` | PETG | 19 min | 4 g | Top of the plate: checks the camera collar |
-| `bumper_tpu.3mf` | TPU | 1 h 26 min | 13 g | |
-| `plate_petg.3mf` | PETG | 1 h 12 min | 21 g | One colour, e.g. Galaxy Black |
-| `plate_petg_2color.3mf` | PETG | 1 h 12 min | 21 g | Pauses (M600) at 1.40 mm: base layers in clear, map and collar in Galaxy Black. The clear lowlands show the Hazel phone through |
+| `test_fit_band_tpu.3mf` | TPU | 45 min | 7 g | Print first. The front 6 mm of the bumper: checks outline, corners, lip, buttons, ports |
+| `test_camera_petg.3mf` | PETG | 18 min | 4 g | Top of the plate: checks the camera collar |
+| `bumper_tpu.3mf` | TPU | 1 h 30 min | 13 g | |
+| `plate_streamlines_petg.gcode` | PETG | 1 h | 21 g | The plate with the streamline layer. G-code, not a project: see below |
+| `plate_streamlines_pla.gcode` | PLA | 1 h | 21 g | The same in PLA, for gold, red and clear pieces. PLA softens near 55 °C |
+| `plate_petg.3mf` | PETG | 45 min | 18 g | The plate without the streamline layer: a plain flat back |
 
 The times are PrusaSlicer 2.9.6 estimates for an Original Prusa MK3S+ with a 0.6
 mm nozzle. Plain STLs are next to the projects, and the settings are also in
@@ -71,8 +73,15 @@ mm nozzle. Plain STLs are next to the projects, and the settings are also in
 - **TPU** (`Generic FLEX` preset, flow capped at 2 mm³/s): dry it first (about
   50 °C for 4–6 h). Loosen the extruder idler a little if it skips. If your TPU
   is softer than 95A, lower `filament_max_volumetric_speed` to 1.2.
-- **PETG** (`Prusament PETG @0.6 nozzle` preset, 0.15 mm layers so every
-  terrace is one layer).
+- **TPU looks**: 0.15 mm layers smooth the 45° lip and the rim fillet for 2–3
+  min more (TPU prints at its flow limit, so thinner layers barely slow it).
+  Concentric lines on the lip and rim faces follow the outline instead of
+  crossing the corners diagonally, and scarf seams hide the outer wall's seam
+  where the contour is smooth. No ironing: TPU smears.
+- **PETG** (`Prusament PETG @0.6 nozzle` preset): the hidden base prints in
+  0.25 mm layers, the streamline layer is 0.25 mm, and the collar is 0.15 mm.
+  The heights are layer-range modifiers in the project, so you can edit them in
+  the GUI. No ironing: it would flatten the streamline beads.
 - **Sheet**: TPU and PETG both stick hard to smooth PEI. Use glue stick as a
   release layer, or use a textured sheet. The bumper prints lip-down, and the
   plate prints inner-face-down, so the sheet sets the finish on the plate's
@@ -80,6 +89,43 @@ mm nozzle. Plain STLs are next to the projects, and the settings are also in
 - **No supports** on either part.
 - **Enclosure**: leave it open or vented. Neither material needs the heat, and
   a warm enclosure can cause heat creep with TPU on the MK3S.
+
+## The streamline layer
+
+The flow is a 2-D lattice-Boltzmann simulation (`case/lbm.py`) of air passing
+the camera collar from the top of the phone, at a Reynolds number of 1000 based
+on the collar's 74 mm width. The phone's back is a window into open flow: the
+simulated domain is six collar-widths wide, because walls at the phone's edges
+would block 97% of the channel. The collar sheds vortices from alternate ends
+(Strouhal number about 0.27), and the layer uses one instant of that cycle
+(`out/renders/streamline_flow.png`).
+
+The toolpaths are evenly spaced streamlines of that instant (Jobard & Lefer),
+0.55 mm apart. Each bead is as wide as the gap to its neighbours, from 0.47 to
+1.0 mm, so the beads cover the face (99%) without piling up. Lines print in
+order of stream function, each in the flow direction. Colour fed in sequence
+therefore lands in stream tubes: bands that wrap the vortices in rings and
+widen where the flow slows.
+
+To print it:
+
+1. Copy `plate_streamlines_petg.gcode` to the SD card and print it with black
+   or Galaxy Black PETG loaded.
+2. Before the colour change, turn the filament sensor off (Settings > Fil.
+   sensor > Off). It would see each gap between pieces as a run-out.
+3. About 38 min in, at 1.5 mm, the printer stops for a colour change (M600).
+   Load piece 1, let it purge clean, and confirm.
+4. Keep feeding: as the tail of each piece reaches the extruder's intake, push
+   the next one in behind it, end to end. Cut the ends square. The layer takes
+   about 14 min and uses 967 mm of filament.
+5. At the second colour change, load black again for the collar, and turn the
+   sensor back on.
+
+The cut list, with the length and colour of each piece, is in `out/REPORT.md`.
+The colours blend over 1–2 cm of filament in the hotend, which the previews
+model (`out/renders/streamline_colors.png`). To check the G-code before
+printing, open it in PrusaSlicer's G-code viewer: `prusa-slicer --gcodeviewer
+out/print/plate_streamlines_petg.gcode`.
 
 ## Assembly
 
@@ -107,18 +153,25 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 
 ```bash
 uv sync                        # once
-uv run python -m case.build    # about 40 s: geometry, STL/STEP, PrusaSlicer projects, slicing check, renders
+uv run python -m case.build    # about 20 s: geometry, STL/STEP, PrusaSlicer projects, slicing, streamline G-code, renders
 ```
 
 Some useful knobs:
 
 - `Case.fit`: side clearance. Raise it by 0.05 if the fit band is too tight.
-- `Case.topo_source`: the map. Use a key of `case/topo.PLACES` (`rainier`,
-  `half-dome`, `matterhorn`, `fuji`, `mt-washington`, `grand-canyon`), any
-  `"lat,lon,width_km"`, `"procedural:<seed>"`, or `None` for a plain back.
-  Elevation comes from the public AWS Terrain Tiles and is cached in `data/`.
-- `Case.two_color_level`: which terrace the filament swap happens at in the
-  two-colour plate.
+- `Case.design`: `"streamlines"` (the default), `"karman"` (a raised Kármán
+  vortex street behind a small cylinder), `"topo"` (a terraced topographic
+  map), or `"none"`.
+- `Case.stream_phase`: which of 16 snapshots of the shedding cycle to use, and
+  `Case.stream_bands`: how many colour pieces. `lbm.Wake.Re` sets the Reynolds
+  number. A new flow takes about 8 min to simulate and is cached in `data/`.
+- `Case.topo_source`: the map, for `design="topo"`. Use a key of
+  `case/topo.PLACES` (`rainier`, `half-dome`, `matterhorn`, `fuji`,
+  `mt-washington`, `grand-canyon`), any `"lat,lon,width_km"`, or
+  `"procedural:<seed>"`. Elevation comes from the public AWS Terrain Tiles and
+  is cached in `data/`.
+- `Case.two_color_level`: which relief layer the filament swap happens at in
+  the two-colour relief plates.
 - `Case.lip_h`, `lip_side`, `lip_end`: lip height and how far it reaches over
   the screen.
 - `Case.outer_corner_r`, `corner_relief_r`: corner thickness and air pocket.
@@ -137,6 +190,10 @@ phone, or each part on its own.
 | `case/phone.py` | Pixel 9 Pro XL reference model |
 | `case/bumper.py` | TPU bumper |
 | `case/plate.py` | back plate, camera collar, relief |
+| `case/lbm.py`, `streamflow.py` | lattice-Boltzmann flow past the collar |
+| `case/streamtrace.py` | evenly spaced streamlines |
+| `case/toolpath.py`, `streamplate.py` | streamline layer: ordering, bead widths, G-code splice, colour mixing |
+| `case/flow.py` | Kármán street behind a cylinder (the `karman` relief) |
 | `case/topo.py` | elevation data and terrace generation |
 | `case/slicer.py` | PrusaSlicer presets (flattened from Prusa's bundle) and projects |
 | `case/build.py` | builds every output |

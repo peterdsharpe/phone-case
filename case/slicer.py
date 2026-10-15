@@ -123,6 +123,16 @@ def _replace_in_zip(path: pathlib.Path, files: dict[str, str]) -> None:
     path.chmod(0o644)
 
 
+def add_layer_ranges(project: pathlib.Path, ranges: list[tuple[float, float, float]]) -> None:
+    """Per-height layer thickness (PrusaSlicer "height range modifiers"), editable in the GUI.
+
+    ranges: (z_min, z_max, layer_height) for object 1."""
+    rows = "".join(f'  <range min_z="{a:g}" max_z="{b:g}">\n   <option opt_key="extruder">0</option>\n'
+                   f'   <option opt_key="layer_height">{h:g}</option>\n  </range>\n' for a, b, h in ranges)
+    xml = f'<?xml version="1.0" encoding="utf-8"?>\n<objects>\n <object id="1">\n{rows} </object>\n</objects>\n'
+    _replace_in_zip(project, {"Metadata/Prusa_Slicer_layer_config_ranges.xml": xml})
+
+
 def add_custom_gcode(project: pathlib.Path, events: list[tuple[float, str, str]]) -> None:
     """Insert colour changes / pauses into a .3mf project (shown in PrusaSlicer's layer slider).
 

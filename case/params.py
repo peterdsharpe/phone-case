@@ -117,14 +117,29 @@ class Case:
     grip_left_y: tuple[float, float] = (-62.0, 34.0)
     grip_right_y: tuple[float, float] = (-62.0, -9.0)
 
-    # --- topographic relief on the plate ------------------------------------------
-    topo_source: str | None = "rainier"  # a key of topo.PLACES, "lat,lon,width_km", "procedural:<seed>", or None
+    # --- relief on the plate ----------------------------------------------------------
+    # "streamlines" (toolpaths along the collar's wake, spliced into the G-code),
+    # "karman" (raised vortex-street streaklines), "topo" (terraced map), or "none"
+    design: str = "streamlines"
+    plate_layer: float = 0.15  # plate print layer height; relief heights are multiples of it
+    relief_margin: float = 0.4  # keep relief this far inside the rim
+    relief_collar_margin: float = 1.2  # ...and this far from the camera collar
+    # Kármán street (see case/flow.py for the simulation parameters)
+    flow_ridge_w: float = 1.0  # dye line width
+    flow_ridge_h: float = 0.45  # dye line height (3 layers)
+    flow_cyl_h: float = 0.45  # the cylinder stands this much above the dye lines
+    # Streamline top layer (see case/lbm.py for the flow, case/toolpath.py for the G-code)
+    stream_h: float = 0.25  # the streamline layer's height (thicker = richer colour)
+    stream_sep: float = 0.55  # line spacing; 0.6 mm wide lines at 0.25 mm layers
+    stream_phase: int = 4  # which of the 16 snapshots (they span ~1.7 shedding periods)
+    stream_bands: int = 12  # colour pieces in the cut list (equal stream-function ranges)
+    base_layer: float = 0.25  # plate layers under the streamline layer (hidden, so thick)
+    # Terraced topographic map
+    topo_source: str = "rainier"  # a key of topo.PLACES, "lat,lon,width_km", or "procedural:<seed>"
     topo_levels: int = 6  # number of terraces
     topo_step: float = 0.15  # terrace height = one 0.15 mm layer
-    topo_margin: float = 0.4  # keep relief this far inside the rim
-    topo_collar_margin: float = 1.2
-    topo_min_feature: float = 0.8  # drop islands/slivers narrower than this (0.6 nozzle)
-    two_color_level: int = 1  # two-colour plate: filament swap at the start of this terrace
+    min_feature: float = 0.8  # drop islands/slivers narrower than this (0.6 nozzle)
+    two_color_level: int = 1  # two-colour plate: filament swap at the start of this relief layer
 
     # Derived sizes ------------------------------------------------------------------
     def outer_W(self, p: Phone) -> float:
