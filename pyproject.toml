@@ -1,0 +1,20 @@
+[project]
+name = "phone-case"
+version = "0.1.0"
+description = "Parametric, 3D-printable case for the Google Pixel 9 Pro XL"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "build123d>=0.9",
+    "numpy",
+    "shapely>=2",
+    "trimesh",
+    "manifold3d",
+    "pyvista",
+    "matplotlib",
+    "scipy",
+    "networkx>=3.7",
+    "rtree>=1.4.1",
+]
+
+[tool.uv]
+package = false
