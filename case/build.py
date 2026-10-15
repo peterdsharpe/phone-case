@@ -89,14 +89,20 @@ def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None) -> 
     ini = OUT / "profiles" / f"{name}.ini"
     slicer.write_ini(cfg, ini, header=f"PrusaSlicer config for {name}: {slicer.PRINTER} + {spec['print']} + {spec['filament']} + overrides.\nImport with File > Import > Import Config.")
     proj = stl_path.with_suffix(".3mf").with_name(f"{name}.3mf")
-    slicer.run(["--load", str(ini), "--center", "125,105", "--export-3mf", "-o", str(proj), str(stl_path)])
+    proj.unlink(missing_ok=True)
+    log = slicer.run(["--load", str(ini), "--center", "125,105", "--export-3mf", "-o", str(proj), str(stl_path)])
+    if not proj.exists():
+        raise RuntimeError(f"PrusaSlicer wrote no project for {name}:\n{log}")
     slicer.embed_config(proj, cfg)
     if events:
         slicer.add_custom_gcode(proj, events)
     gdir = OUT / "gcode"
     gdir.mkdir(exist_ok=True)
     gcode = gdir / f"{name}.gcode"
-    slicer.run(["--export-gcode", "-o", str(gcode), str(proj)])  # slice the project itself
+    gcode.unlink(missing_ok=True)
+    log = slicer.run(["--export-gcode", "-o", str(gcode), str(proj)])  # slice the project itself
+    if not gcode.exists():  # PrusaSlicer exits 0 even when it refuses to slice
+        raise RuntimeError(f"PrusaSlicer wrote no G-code for {name}:\n{log}")
     stats = slicer.gcode_stats(gcode)
     text = gcode.read_text(errors="ignore")
     stats["M600"] = str(sum(1 for line in text.splitlines() if line.startswith("M600")))
