@@ -8,7 +8,6 @@ dependencies = [
     "numpy",
     "shapely>=2",
     "trimesh",
-    "manifold3d",
     "pyvista",
     "matplotlib",
     "scipy",
