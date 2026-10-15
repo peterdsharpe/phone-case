@@ -204,8 +204,8 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
             fl = flip(l)
             w = lyr.widths(k)
             segs += list(np.stack([fl[:-1], fl[1:]], 1)); rgb += list(0.5 * (cl[:-1] + cl[1:]))
-            lws += list(0.5 * (w[1:] + w[:-1]) * lw / lyr.d_sep * 0.92)  # printed width (beads overlap a little)
-        ax.add_collection(LineCollection(segs, linewidths=lws, colors=rgb, capstyle="butt"))
+            lws += list(0.5 * (w[1:] + w[:-1]) * lw / lyr.d_sep)  # printed width
+        ax.add_collection(LineCollection(segs, linewidths=lws, colors=rgb, capstyle="round", antialiaseds=False))
         ax.set_title(title, fontsize=9)
     fig.subplots_adjust(0.01, 0.0, 0.99, 0.96, wspace=0.04)
     fig.savefig(out / "streamline_colors.png", dpi=170)

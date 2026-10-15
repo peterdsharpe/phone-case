@@ -1,6 +1,6 @@
 # Build report
 
-Built by `python -m case.build` in 19 s.
+Built by `python -m case.build` in 18 s.
 
 | part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | colour changes |
 |---|---|---|---|---|---|---|
