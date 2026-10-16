@@ -21,7 +21,7 @@ OPP = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], np.int32)
 
 
 @cuda.jit(fastmath=True)
-def step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2):
+def step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2, omega_b):
     """One fused pull-stream + regularized-BGK (+ Smagorinsky) step; see lbm._step."""
     j, i = cuda.grid(2)  # j (contiguous axis) varies fastest across threads
     NI = solid.shape[0]
@@ -81,11 +81,15 @@ def step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2):
         r = float32(j - j_sponge) / float32(NJ - j_sponge)
         sg = sigma * r * r
     third = float32(1.0 / 3.0)
+    tr = half * (pxx + pyy)
+    axx = (one - om) * (pxx - tr) + (one - omega_b) * tr
+    ayy = (one - om) * (pyy - tr) + (one - omega_b) * tr
+    axy = (one - om) * pxy
     for q in range(9):
         cx = float32(CX[q])
         cy = float32(CY[q])
-        fneq = WT[q] * float32(4.5) * ((cx * cx - third) * pxx + (cy * cy - third) * pyy + float32(2.0) * cx * cy * pxy)
-        post = feq[q] + (one - om) * fneq
+        post = feq[q] + WT[q] * float32(4.5) * ((cx * cx - third) * axx + (cy * cy - third) * ayy
+                                                + float32(2.0) * cx * cy * axy)
         cu = three * (cy * u_in)
         f0 = WT[q] * (one + cu + half * cu * cu - float32(1.5) * u_in * u_in)
         fn[q, i, j] = post - sg * (post - f0)
@@ -171,9 +175,9 @@ class Backend:
         self.block = (32, 8)
         self.grid = ((self.NJ + 31) // 32, (self.NI + 7) // 8)
 
-    def step(self, omega, u_in, j_sponge, sigma, cs2):
+    def step(self, omega, u_in, j_sponge, sigma, cs2, omega_b):
         step[self.grid, self.block](self.f, self.fn, self.solid, np.float32(omega), np.float32(u_in),
-                                    np.int32(j_sponge), np.float32(sigma), np.float32(cs2))
+                                    np.int32(j_sponge), np.float32(sigma), np.float32(cs2), np.float32(omega_b))
         self.f, self.fn = self.fn, self.f
 
     def velocity(self):

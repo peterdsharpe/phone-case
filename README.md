@@ -100,6 +100,20 @@ flow: the domain is five collar-widths wide, because walls at the phone's edges
 would block 97% of the channel. The shear layers from the collar's ends roll up
 into vortices that pair, merge and break into smaller eddies.
 
+**Checking the flow for numerical noise.** At this Reynolds number the lattice
+is almost inviscid, and it can grow grid-scale noise: striped wave packets about
+five cells (0.6 mm) across, which the print would show as texture. Three
+settings keep it out. The lattice inflow speed is 0.0125, so the fastest vortex
+edges stay near 0.06; at 0.025 they reached 0.11 and the packets grew. The
+Smagorinsky constant is 0.17. A separate bulk relaxation damps compression
+waves (Dellar 2001). Each snapshot's vorticity and divergence spectra are
+recorded at lattice resolution (`case/spectra.py`). The build refuses a snapshot
+whose enstrophy piles up near the grid scale (the top band above 1% of the
+middle band) or whose divergence variance exceeds 0.1% of its vorticity
+variance. At Re 30,000, 15 of the 16 snapshots pass; the default is phase 8.
+`out/renders/flow_spectra.png` shows the spectra and a map of the grid-scale
+residual for the snapshot in use.
+
 **Why dye, not streamlines.** An instantaneous streamline of a smooth 2-D field
 looks like a field line from electrostatics. What reads as fluid in flow
 photographs is dye: it records the flow's history, so it rolls up and folds into
@@ -179,7 +193,7 @@ Some useful knobs:
   dye structure is; `Case.stream_source = "streamlines"` for instantaneous
   streamlines instead of dye. `lbm.Wake` sets the Reynolds number and the
   resolution. The snapshot in use is committed (`data/snap_*.npz`); any other
-  takes about 5 min on the GPU (`uv sync --extra gpu`) to simulate.
+  takes about 9 min on the GPU (`uv sync --extra gpu`) to simulate.
 - `Case.topo_source`: the map, for `design="topo"`. Use a key of
   `case/topo.PLACES` (`rainier`, `half-dome`, `matterhorn`, `fuji`,
   `mt-washington`, `grand-canyon`), any `"lat,lon,width_km"`, or

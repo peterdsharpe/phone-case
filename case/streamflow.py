@@ -36,7 +36,8 @@ def snapshot(p: Phone, c: Case, phase: int, w: lbm.Wake = lbm.Wake()) -> dict:
     path = lbm.DATA / f"snap_{w.key(tag)}_{phase}.npz"
     if not path.exists():
         r = wake(p, c, w)
+        per = {k: r[k][phase:phase + 1] for k in r if k.startswith("spec_") and k != "spec_k"}
         np.savez_compressed(path, xs=r["xs"], ys=r["ys"], U=r["U"], shots=r["shots"][phase:phase + 1],
-                            dye=r["dye"][phase:phase + 1])
+                            dye=r["dye"][phase:phase + 1], spec_k=r.get("spec_k", np.zeros(0)), **per)
     z = np.load(path)
     return {k: z[k] for k in z.files}

@@ -191,9 +191,9 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
         ext = (-xs[-1], -xs[0], ys[0], ys[-1])
         axes[0].imshow(w[::-1].T, origin="lower", extent=ext, cmap="RdBu_r", vmin=-lim, vmax=lim, interpolation="bilinear")
         axes[0].add_collection(LineCollection([flip(l) for l in lyr.lines], lw=0.25, color="#202020", alpha=0.6))
-        if dye is not None:  # 3 mm stripes of the inlet label: the streaklines the toolpaths follow
+        if dye is not None:  # 3 mm stripes of the smoothed inlet label: the streaklines the toolpaths follow
             axes[1].imshow(np.sin(2 * np.pi * dye / 3.0)[::-1].T, origin="lower", extent=ext, cmap="gray",
-                           interpolation="bilinear")
+                           interpolation="antialiased")
         for ax in axes:
             ax.add_patch(patch(plate_shape.difference(region), facecolor="#d8d8d8", edgecolor="none", alpha=0.85))
             ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3); ax.set_aspect(1); ax.axis("off")
@@ -280,3 +280,42 @@ def streamline_renders(lyr, bands, b, plate_part, p: Phone, c: Case, out: pathli
           [(-88, -133, -109), (5, -40, -2), UP], zoom=1.0, fit=False)
     shoot(scene("petg", raking=True), str(out / "stream_bead_detail.png"),
           [(-75, -95, -70), (5, -35, -2), UP], zoom=1.0, fit=False)
+
+
+def flow_spectra(r: dict, path: pathlib.Path) -> None:
+    """Evidence for the spectral check: enstrophy and divergence spectra at lattice resolution
+    and the high-pass vorticity residual of the stored field (where grid-scale noise lives)."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from scipy.ndimage import gaussian_filter
+
+    from .spectra import describe, fields, from_snapshot
+
+    m = from_snapshot(r)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    k = m["k"]
+    for name, S, col in (("vorticity (enstrophy)", m["Z"], "#1f77b4"), ("divergence", m["D"], "#ff7f0e")):
+        axes[0].loglog(k[1:], S[1:] / m["Z"][1:].max(), color=col, label=name)
+    kr = np.array([0.08, 1.0]) * k[-1]
+    axes[0].loglog(kr, (kr / kr[0]) ** -3 * 0.5, "k--", lw=0.8, label="k$^{-3}$ (2-D enstrophy cascade)")
+    axes[0].axvline(k[-1], color="r", lw=0.8, label="Nyquist")
+    axes[0].set_xlabel("k (rad/mm)")
+    axes[0].set_title(f"shell spectra ({m['source']} resolution)", fontsize=10)
+    axes[0].legend(fontsize=8)
+    axes[0].text(0.02, 0.02, describe(m).replace(", ", "\n"), transform=axes[0].transAxes, fontsize=7)
+    xs, ys = r["xs"].astype(float), r["ys"].astype(float)
+    v = r["shots"][0].astype(float) / float(r["U"])
+    if ys[0] > ys[-1]:
+        ys, v = ys[::-1], v[:, :, ::-1]
+    om, _ = fields(v[0], v[1], xs[1] - xs[0])
+    hp = om - gaussian_filter(om, 1.0)
+    below = ys < 38.0  # colour scale from the open wake, not the collar's wall layer
+    lim = max(np.percentile(np.abs(hp[:, below]), 99.9), 1e-9)
+    axes[1].imshow(hp[::-1].T, origin="lower", cmap="RdBu_r", vmin=-lim, vmax=lim, extent=(-xs[-1], -xs[0], ys[0], ys[-1]))
+    axes[1].set_title("high-pass vorticity residual of the stored field (seen from the back)", fontsize=10)
+    axes[1].set_aspect(1)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)

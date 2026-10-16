@@ -136,8 +136,14 @@ def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None, ran
 def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "petg"):
     """Slice the flat plate, then splice in the streamline layer (see case/toolpath.py).
     Returns the slicer stats, the report section, the layer and its colour bands."""
-    from . import streamplate, toolpath
+    from . import spectra, streamplate, toolpath
+    from .streamflow import snapshot
 
+    health = spectra.from_snapshot(snapshot(p, c, c.stream_phase))
+    note(f"flow snapshot spectral check ({health['source']} resolution): {spectra.describe(health)}")
+    if not spectra.healthy(health):
+        raise RuntimeError("the flow snapshot fails the spectral check (grid-scale instability): "
+                           f"{spectra.describe(health)}. Pick another Case.stream_phase or fix the solver.")
     spec = dict(spec, overrides=dict(spec["overrides"], first_layer_height=c.base_layer))
     n_base = round(c.plate_t / c.base_layer)
     assert abs(n_base * c.base_layer - c.plate_t) < 1e-6, "plate_t must be a whole number of base layers"
@@ -159,6 +165,7 @@ def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "pe
          f"about {minutes:.0f} min")
     report = [
         "## Streamline layer", "",
+        f"Flow snapshot: spectral check passed ({spectra.describe(health)}; `out/renders/flow_spectra.png`).", "",
         f"`out/print/plate_streamlines_{tag}.gcode` is the plate's G-code with the streamline layer spliced in at "
         f"z = {lyr.z:g} mm ({lyr.h:g} mm thick): {len(lyr.lines)} lines, {length / 1000:.1f} m of path, "
         f"{info['filament_mm']:.0f} mm of filament, about {minutes:.0f} min. Coverage {cov:.1%}.", "",
@@ -258,13 +265,19 @@ def main(argv=None):
 
         render_all(b, pl, p, c, OUT / "renders")
         if stream:
-            from .figures import streamline_previews, streamline_renders
+            from . import streamplate
+            from .figures import flow_spectra, streamline_previews, streamline_renders
             from .streamflow import snapshot
 
             lyr, bands = stream
             r = snapshot(p, c, c.stream_phase)
-            flow = (r["xs"], r["ys"], r["shots"][0], r["dye"][0] if "dye" in r else None)
+            if "dye" in r:  # the smoothed label the toolpaths follow, on ascending grids
+                xs, ys, s, (vx, vy) = streamplate.field(r, 0, c.dye_smooth)
+                flow = (xs, ys, np.stack([vx, vy]), s)
+            else:
+                flow = (r["xs"], r["ys"], r["shots"][0], None)
             streamline_previews(lyr, region, bands, p, c, OUT / "renders", flow=flow)
+            flow_spectra(r, OUT / "renders" / "flow_spectra.png")
             streamline_renders(lyr, bands, b, pl, p, c, OUT / "renders")
         note(f"rendered at {time.time() - t0:.0f} s")
 

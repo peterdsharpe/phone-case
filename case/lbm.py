@@ -25,7 +25,7 @@ OPP = np.array([0, 3, 4, 1, 2, 7, 8, 5, 6], np.int64)
 
 
 @nb.njit(parallel=True, fastmath=True, cache=True)
-def _step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2):
+def _step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2, omega_b):
     """One fused pull-stream + regularized-BGK collide step.
 
     Lattice axes: i = cross-stream (periodic), j = streamwise (flow toward +j).
@@ -35,7 +35,10 @@ def _step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2):
 
     cs2 > 0 adds a Smagorinsky subgrid viscosity (constant C with cs2 = C^2), computed
     locally from the non-equilibrium momentum flux (Hou et al. 1996), so shear layers
-    thinner than the grid stay stable at high Reynolds number."""
+    thinner than the grid stay stable at high Reynolds number. The trace (compressive) part
+    of the non-equilibrium flux relaxes at its own rate omega_b (a bulk viscosity, Dellar
+    2001): omega_b = 1 removes it each step, which kills grid-scale acoustic noise that the
+    tiny shear viscosity would leave to grow (it did, in Re 3e4 vortex cores)."""
     NI, NJ = solid.shape
     tau0 = 1.0 / omega
     f0 = np.empty(9)
@@ -81,10 +84,13 @@ def _step(f, fn, solid, omega, u_in, j_sponge, sigma, cs2):
             if j > j_sponge:
                 r = (j - j_sponge) / (NJ - j_sponge)
                 sg = sigma * r * r
+            tr = 0.5 * (pxx + pyy)
+            axx = (1.0 - om) * (pxx - tr) + (1.0 - omega_b) * tr
+            ayy = (1.0 - om) * (pyy - tr) + (1.0 - omega_b) * tr
+            axy = (1.0 - om) * pxy
             for q in range(9):
                 qxx = CX[q] * CX[q] - 1.0 / 3.0; qyy = CY[q] * CY[q] - 1.0 / 3.0; qxy = CX[q] * CY[q]
-                fneq = WT[q] * 4.5 * (qxx * pxx + qyy * pyy + 2.0 * qxy * pxy)
-                post = feq[q] + (1.0 - om) * fneq
+                post = feq[q] + WT[q] * 4.5 * (qxx * axx + qyy * ayy + 2.0 * qxy * axy)
                 fn[q, i, j] = post - sg * (post - f0[q])
 
 
@@ -141,8 +147,8 @@ class _CPUBackend:
         self.c, self.cn, self.c_in = c, np.empty_like(c), c_in
         self.ux, self.uy = np.empty(solid.shape), np.empty(solid.shape)
 
-    def step(self, omega, u_in, j_sponge, sigma, cs2):
-        _step(self.f, self.fn, self.solid, omega, u_in, j_sponge, sigma, cs2)
+    def step(self, omega, u_in, j_sponge, sigma, cs2, omega_b):
+        _step(self.f, self.fn, self.solid, omega, u_in, j_sponge, sigma, cs2, omega_b)
         self.f, self.fn = self.fn, self.f
 
     def velocity(self):
@@ -165,8 +171,9 @@ class Wake:
 
     Re: float = 30000.0
     dx: float = 0.125  # 594 cells across the collar (GPU: ~5 min, under 1.5 GB)
-    U: float = 0.025  # lattice inflow speed (Mach 0.04): the tightest 2-D vortex cores spin at up to ~7 U
-    smagorinsky: float = 0.1  # subgrid model constant (0: none)
+    U: float = 0.0125  # lattice inflow speed; vortex edges reach ~5 U. At 0.025 and 0.04 they were fast enough (0.11+) to make grid-scale wave packets grow
+    smagorinsky: float = 0.17  # subgrid model constant (0: none); 0.1 left grid-scale wave packets at Re 1e4
+    bulk_omega: float = 1.0  # relaxation rate of the compressive stress (1: removed each step); see _step
     sponge: float = 80.0  # mm before the outlet where the wake is damped
     sponge_sigma: float = 0.05
     width_mult: float = 5.0  # domain width in collar widths
@@ -235,11 +242,17 @@ def run(w: Wake, body_mask_fn, window: tuple[float, float, float, float], body_w
     else:
         be = _CPUBackend(f, solid, np.ascontiguousarray(X.copy()), c_in)
     del f
-    shots, dyes = [], []
+    shots, dyes, specs = [], [], []
+    # Full-resolution spectral check at every snapshot, on fluid below the body: the stored
+    # (block-averaged) fields would hide a two-cell checkerboard.
+    from .spectra import spectra
+
+    ic = np.where((xs >= x0 + 3) & (xs <= x1 - 3))[0]
+    jc = np.where((ys >= y0 + 3) & (ys <= yb - 3))[0]
     probe = []  # cross-stream velocity behind the body, to measure the real period
     pi_, pj = NI // 2, int(np.argmin(np.abs(ys - (y0 + 0.3 * (y1 - y0)))))
     for n in range(n_total):
-        be.step(omega, w.U, j_sponge, w.sponge_sigma, w.smagorinsky ** 2)
+        be.step(omega, w.U, j_sponge, w.sponge_sigma, w.smagorinsky ** 2, w.bulk_omega)
         snap = n >= n_spin and (n - n_spin) % every == 0
         dye = n % w.dye_every == 0
         if n % 50 == 0 or snap or dye:
@@ -252,13 +265,17 @@ def run(w: Wake, body_mask_fn, window: tuple[float, float, float, float], body_w
             ux, uy, c = be.host("ux"), be.host("uy"), be.host("c")
             shots.append(np.stack([block(ux), -block(uy)]))  # phone (vx, vy)
             dyes.append(block(c))
+            specs.append(spectra(ux[np.ix_(ic, jc)][:, ::-1] / w.U, -uy[np.ix_(ic, jc)][:, ::-1] / w.U, w.dx))
         if progress and n % 5000 == 0:
             sp = np.hypot(be.host("ux"), be.host("uy"))
             print(f"  step {n}/{n_total}  max|u|/U = {sp.max() / w.U:.2f}", flush=True)
             if not np.isfinite(sp).all():
                 raise FloatingPointError("LBM diverged")
     bx = xs[ii].reshape(-1, k).mean(1); by = ys[jj].reshape(-1, k).mean(1)
-    return dict(xs=bx, ys=by, shots=np.stack(shots), dye=np.stack(dyes), probe=np.array(probe), period_guess=period,
+    sp = dict(spec_k=specs[0]["k"], spec_Z=np.stack([m["Z"] for m in specs]), spec_D=np.stack([m["D"] for m in specs]),
+              spec_div_ratio=np.array([m["div_ratio"] for m in specs]), spec_hi_mid=np.array([m["hi_mid"] for m in specs]),
+              spec_bump=np.array([m["bump"] for m in specs]))
+    return sp | dict(xs=bx, ys=by, shots=np.stack(shots), dye=np.stack(dyes), probe=np.array(probe), period_guess=period,
                 every=every, U=w.U, omega=omega, grid=(NI, NJ))
 
 
