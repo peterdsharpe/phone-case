@@ -7,10 +7,10 @@ replace. It has two parts:
 - **Bumper (TPU)**: side walls, front lip, thick corners with air pockets, and
   a rear rim that holds the plate in. It takes the hits and wears out first.
 - **Back plate (PETG)**: covers the back glass and has the raised camera collar
-  built in. Its visible face is one extra print layer whose lines follow the
-  streamlines of air flowing past the camera collar, from a lattice-Boltzmann
-  simulation of the wake. Feed the extruder short pieces of different colours
-  and the colours run along the flow, like dye in a water tunnel.
+  built in. Its visible face is one extra print layer whose lines follow dye
+  streaks in a simulated turbulent wake behind the camera collar. Feed the
+  extruder short pieces of different colours and the colours run along the
+  streaks, like dye in a water tunnel.
 
 ![Back, PETG palette](out/renders/stream_back_petg.png)
 
@@ -92,20 +92,33 @@ mm nozzle. Plain STLs are next to the projects, and the settings are also in
 
 ## The streamline layer
 
-The flow is a 2-D lattice-Boltzmann simulation (`case/lbm.py`) of air passing
-the camera collar from the top of the phone, at a Reynolds number of 1000 based
-on the collar's 74 mm width. The phone's back is a window into open flow: the
-simulated domain is six collar-widths wide, because walls at the phone's edges
-would block 97% of the channel. The collar sheds vortices from alternate ends
-(Strouhal number about 0.27), and the layer uses one instant of that cycle
-(`out/renders/streamline_flow.png`).
+**The flow.** A 2-D lattice-Boltzmann simulation (`case/lbm.py`, on the GPU with
+numba-cuda, or on the CPU) of air coming down past the camera collar at a
+Reynolds number of 30,000 on its 74 mm width, with 594 lattice cells across the
+collar and a Smagorinsky subgrid model. The phone's back is a window into open
+flow: the domain is five collar-widths wide, because walls at the phone's edges
+would block 97% of the channel. The shear layers from the collar's ends roll up
+into vortices that pair, merge and break into smaller eddies.
 
-The toolpaths are evenly spaced streamlines of that instant (Jobard & Lefer),
-0.55 mm apart. Each bead is as wide as the gap to its neighbours, from 0.47 to
-1.0 mm, so the beads cover the face (99%) without piling up. Lines print in
-order of stream function, each in the flow direction. Colour fed in sequence
-therefore lands in stream tubes: bands that wrap the vortices in rings and
-widen where the flow slows.
+**Why dye, not streamlines.** An instantaneous streamline of a smooth 2-D field
+looks like a field line from electrostatics. What reads as fluid in flow
+photographs is dye: it records the flow's history, so it rolls up and folds into
+filaments. The simulation carries a dye label (each parcel keeps the x at which
+it entered), and the toolpaths are contours of that label, which are exactly the
+streaklines of a rake across the inlet. Contours of one field never cross.
+
+**The toolpaths** (`case/contourpaths.py`). The label, smoothed to 1.2 mm, is
+contoured at thousands of fine levels, and each level is drawn only where the
+local spacing calls for another line: level m is visible where the fine-level
+density f = Δ / (|∇s| d) exceeds its threshold, which is level m's index
+bit-reversed (an ordered dither). Lines run unbroken until they leave the window
+or close on themselves; where the dye spreads, new lines start one by one at
+scattered places instead of in a row, with hysteresis so they do not flicker on
+and off. Each line is then nudged sideways toward the middle of its strip, beads
+get the width of the strip they fill (0.47 to 1.0 mm), free ends taper, closed
+loops start at a random point, one bead outlines the window, and a final pass
+fills the larger holes. Lines print in order of dye label, each in the flow
+direction, so colour fed in sequence becomes dye streams.
 
 To print it:
 
@@ -116,16 +129,15 @@ To print it:
 3. About 38 min in, at 1.5 mm, the printer stops for a colour change (M600).
    Load piece 1, let it purge clean, and confirm.
 4. Keep feeding: as the tail of each piece reaches the extruder's intake, push
-   the next one in behind it, end to end. Cut the ends square. The layer takes
-   about 14 min and uses 967 mm of filament.
+   the next one in behind it, end to end. Cut the ends square.
 5. At the second colour change, load black again for the collar, and turn the
    sensor back on.
 
-The cut list, with the length and colour of each piece, is in `out/REPORT.md`.
-The colours blend over 1–2 cm of filament in the hotend, which the previews
-model (`out/renders/streamline_colors.png`). To check the G-code before
-printing, open it in PrusaSlicer's G-code viewer: `prusa-slicer --gcodeviewer
-out/print/plate_streamlines_petg.gcode`.
+The cut list, with the length and colour of each piece, and the layer's length
+and time are in `out/REPORT.md`. The colours blend over 1–2 cm of filament in
+the hotend, which the previews model (`out/renders/streamline_colors.png`). To
+check the G-code before printing, open it in PrusaSlicer's G-code viewer:
+`prusa-slicer --gcodeviewer out/print/plate_streamlines_petg.gcode`.
 
 ## Assembly
 
@@ -162,9 +174,12 @@ Some useful knobs:
 - `Case.design`: `"streamlines"` (the default), `"karman"` (a raised Kármán
   vortex street behind a small cylinder), `"topo"` (a terraced topographic
   map), or `"none"`.
-- `Case.stream_phase`: which of 16 snapshots of the shedding cycle to use, and
-  `Case.stream_bands`: how many colour pieces. `lbm.Wake.Re` sets the Reynolds
-  number. A new flow takes about 8 min to simulate and is cached in `data/`.
+- `Case.stream_phase`: which of 16 snapshots of the shedding cycle to use;
+  `Case.stream_bands`: how many colour pieces; `Case.dye_smooth`: how fine the
+  dye structure is; `Case.stream_source = "streamlines"` for instantaneous
+  streamlines instead of dye. `lbm.Wake` sets the Reynolds number and the
+  resolution. The snapshot in use is committed (`data/snap_*.npz`); any other
+  takes about 5 min on the GPU (`uv sync --extra gpu`) to simulate.
 - `Case.topo_source`: the map, for `design="topo"`. Use a key of
   `case/topo.PLACES` (`rainier`, `half-dome`, `matterhorn`, `fuji`,
   `mt-washington`, `grand-canyon`), any `"lat,lon,width_km"`, or
@@ -190,9 +205,10 @@ phone, or each part on its own.
 | `case/phone.py` | Pixel 9 Pro XL reference model |
 | `case/bumper.py` | TPU bumper |
 | `case/plate.py` | back plate, camera collar, relief |
-| `case/lbm.py`, `streamflow.py` | lattice-Boltzmann flow past the collar |
-| `case/streamtrace.py` | evenly spaced streamlines |
-| `case/toolpath.py`, `streamplate.py` | streamline layer: ordering, bead widths, G-code splice, colour mixing |
+| `case/lbm.py`, `lbm_gpu.py`, `streamflow.py` | lattice-Boltzmann flow and dye past the collar (CPU and GPU) |
+| `case/contourpaths.py` | dithered contours of the dye: the toolpaths |
+| `case/streamtrace.py` | evenly spaced instantaneous streamlines (the `streamlines` source) |
+| `case/toolpath.py`, `streamplate.py` | streamline layer: relaxation, bead widths, gap fill, G-code splice, colour mixing |
 | `case/flow.py` | Kármán street behind a cylinder (the `karman` relief) |
 | `case/topo.py` | elevation data and terrace generation |
 | `case/slicer.py` | PrusaSlicer presets (flattened from Prusa's bundle) and projects |

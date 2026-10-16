@@ -175,21 +175,29 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
     fig.savefig(out / "streamline_toolpaths.png", dpi=200)
     plt.close(fig)
 
-    # 1b. the flow: vorticity with the toolpaths over it
+    # 1b. the flow: vorticity with the toolpaths over it, and the dye label as stripes
     if flow is not None:
-        xs, ys, v = flow
+        xs, ys, v, dye = flow
         v = np.asarray(v, float)
+        dye = None if dye is None else np.asarray(dye, float)
         if ys[0] > ys[-1]:
             ys, v = ys[::-1], v[:, :, ::-1]
+            dye = None if dye is None else dye[:, ::-1]
         w = np.gradient(v[1], xs, axis=0) - np.gradient(v[0], ys, axis=1)
         lim = np.percentile(np.abs(w), 99.5)
-        fig, ax = plt.subplots(figsize=(H * (p.W + 6) / (p.L + 6), H))
-        ax.imshow(w[::-1].T, origin="lower", extent=(-xs[-1], -xs[0], ys[0], ys[-1]), cmap="RdBu_r",
-                  vmin=-lim, vmax=lim, interpolation="bilinear")
-        ax.add_collection(LineCollection([flip(l) for l in lyr.lines], lw=0.25, color="#202020", alpha=0.6))
-        ax.add_patch(patch(plate_shape.difference(region), facecolor="#d8d8d8", edgecolor="none", alpha=0.85))
-        ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3); ax.set_aspect(1); ax.axis("off")
-        fig.subplots_adjust(0, 0, 1, 1)
+        n = 1 if dye is None else 2
+        fig, axes = plt.subplots(1, n, figsize=(n * H * (p.W + 6) / (p.L + 6), H))
+        axes = np.atleast_1d(axes)
+        ext = (-xs[-1], -xs[0], ys[0], ys[-1])
+        axes[0].imshow(w[::-1].T, origin="lower", extent=ext, cmap="RdBu_r", vmin=-lim, vmax=lim, interpolation="bilinear")
+        axes[0].add_collection(LineCollection([flip(l) for l in lyr.lines], lw=0.25, color="#202020", alpha=0.6))
+        if dye is not None:  # 3 mm stripes of the inlet label: the streaklines the toolpaths follow
+            axes[1].imshow(np.sin(2 * np.pi * dye / 3.0)[::-1].T, origin="lower", extent=ext, cmap="gray",
+                           interpolation="bilinear")
+        for ax in axes:
+            ax.add_patch(patch(plate_shape.difference(region), facecolor="#d8d8d8", edgecolor="none", alpha=0.85))
+            ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3); ax.set_aspect(1); ax.axis("off")
+        fig.subplots_adjust(0, 0, 1, 1, wspace=0.02)
         fig.savefig(out / "streamline_flow.png", dpi=200)
         plt.close(fig)
 

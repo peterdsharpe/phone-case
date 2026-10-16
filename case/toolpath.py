@@ -38,6 +38,7 @@ class Layer:
     d_sep: float  # nominal line spacing
     em: float = 1.0  # extrusion multiplier
     spacing: list[np.ndarray] | None = None  # local spacing at each point (variable width)
+    n_frame: int = 0  # leading lines that outline the window: their own colour piece
 
     def __post_init__(self):
         if self.spacing is None:
@@ -57,11 +58,10 @@ class Layer:
         return np.cumsum([self.seg_e(k).sum() for k in range(len(self.lines))])
 
 
-def local_spacing(lines: list[np.ndarray], d_sep: float, lo: float = 0.42, hi: float = 0.95,
-                  step: float = 0.2, k_nn: int = 48) -> list[np.ndarray]:
-    """Centre-to-centre distance to the neighbouring line on each side, averaged: the width
-    of the strip each point of each line has to fill. Sides with no neighbour (the region's
-    edge) keep the nominal spacing."""
+def _sides(lines: list[np.ndarray], step: float = 0.2, k_nn: int = 48):
+    """Distance from each point to the nearest other line on its left and on its right
+    (inf if none within 2 mm), sampled every `step` mm along each line. Returns per line
+    (arc of the samples, arc of the vertices, left, right)."""
     from scipy.spatial import cKDTree
 
     dense, arcs = [], []
@@ -77,20 +77,117 @@ def local_spacing(lines: list[np.ndarray], d_sep: float, lo: float = 0.42, hi: f
     dist, nb = cKDTree(P).query(P, k=k_nn, distance_upper_bound=2.0)
     ok = np.isfinite(dist)
     nb = np.where(ok, nb, 0)
-    same = (lid[nb] == lid[:, None]) & (np.abs(idx[nb] - idx[:, None]) < int(3.0 / step))
-    ok &= ~same
+    ok &= ~((lid[nb] == lid[:, None]) & (np.abs(idx[nb] - idx[:, None]) < int(3.0 / step)))
     dx = P[nb] - P[:, None, :]
     cr = T[:, None, 0] * dx[..., 1] - T[:, None, 1] * dx[..., 0]
     left = np.where(ok & (cr > 0), dist, np.inf).min(1)
     right = np.where(ok & (cr < 0), dist, np.inf).min(1)
-    sp = 0.5 * (np.where(np.isfinite(left), left, d_sep) + np.where(np.isfinite(right), right, d_sep))
-    sp = np.clip(sp, lo, hi)
     out, i0 = [], 0
     for (a, d), q in zip(arcs, dense):
-        v = sp[i0:i0 + len(q)]; i0 += len(q)
-        if len(v) > 4:  # smooth along the line so the flow does not jitter
-            v = np.convolve(np.pad(v, 2, mode="edge"), np.ones(5) / 5, mode="valid")
-        out.append(np.interp(d, a, v))
+        out.append((a, d, left[i0:i0 + len(q)], right[i0:i0 + len(q)]))
+        i0 += len(q)
+    return out
+
+
+def _smooth(v: np.ndarray, n: int) -> np.ndarray:
+    if len(v) <= n:
+        return np.full_like(v, v.mean())
+    return np.convolve(np.pad(v, n // 2, mode="edge"), np.ones(n) / n, mode="valid")[: len(v)]
+
+
+def local_spacing(lines: list[np.ndarray], d_sep: float, lo: float = 0.42, hi: float = 0.95) -> list[np.ndarray]:
+    """Centre-to-centre distance to the neighbouring line on each side, averaged: the width
+    of the strip each point of each line has to fill. Sides with no neighbour (the region's
+    edge) keep the nominal spacing."""
+    out = []
+    for a, d, left, right in _sides(lines):
+        v = 0.5 * (np.where(np.isfinite(left), left, d_sep) + np.where(np.isfinite(right), right, d_sep))
+        out.append(np.interp(d, a, _smooth(np.clip(v, lo, hi), 5)))
+    return out
+
+
+def relax(lines: list[np.ndarray], area: shapely.Geometry, iters: int = 3, alpha: float = 0.5,
+          max_step: float = 0.12, smooth_mm: float = 2.0) -> list[np.ndarray]:
+    """Shift each line sideways toward the middle of its strip (half the left/right imbalance
+    per pass, at most max_step mm), so beads, which are symmetric about their path, can fill
+    both sides. Two neighbours each close at most a quarter of the gap between them, so lines
+    cannot cross; shifts are smoothed along the line and points stay inside `area`."""
+    shapely.prepare(area)
+    for _ in range(iters):
+        new = []
+        for l, (a, d, left, right) in zip(lines, _sides(lines)):
+            L = np.where(np.isfinite(left), left, np.where(np.isfinite(right), right, 0.0))
+            R = np.where(np.isfinite(right), right, L)
+            sh = np.clip(alpha * (L - R) / 2, -max_step, max_step)
+            sh = np.interp(d, a, _smooth(sh, max(1, int(smooth_mm / 0.2))))
+            t = np.gradient(l, axis=0)
+            t /= np.maximum(np.hypot(*t.T), 1e-12)[:, None]
+            q = l + np.c_[-t[:, 1], t[:, 0]] * sh[:, None]
+            keep = shapely.contains_xy(area, q[:, 0], q[:, 1])
+            q[~keep] = l[~keep]
+            if np.hypot(*(l[-1] - l[0])) < 1e-9:  # closed loops stay closed
+                q[-1] = q[0]
+            new.append(q)
+        lines = new
+    return lines
+
+
+def gap_fill(lines: list[np.ndarray], widths: list[np.ndarray], area: shapely.Geometry, min_area: float = 0.4,
+             min_len: float = 1.0, lo: float = 0.45, hi: float = 1.0) -> list[tuple[np.ndarray, float, int]]:
+    """Short beads for the holes the lines leave (lens shapes at saddles, wedges at the edge),
+    as PrusaSlicer's gap fill does: one bead along each hole's long axis, as wide as the hole.
+    Returns (polyline, width, index of the nearest line) for each."""
+    segs = []
+    for l, w in zip(lines, widths):
+        ww = 0.5 * (w[1:] + w[:-1])
+        segs += [shapely.LineString(l[i:i + 2]).buffer(ww[i] / 2, quad_segs=2) for i in range(len(l) - 1)]
+    holes = area.difference(shapely.unary_union(segs))
+    tree = shapely.STRtree([shapely.LineString(l) for l in lines])
+    out = []
+    for g in getattr(holes, "geoms", [holes]):
+        if g.geom_type != "Polygon" or g.area < min_area:
+            continue
+        box = np.asarray(g.minimum_rotated_rectangle.exterior.coords)[:4]
+        e1, e2 = box[1] - box[0], box[2] - box[1]
+        long_, short = (e1, e2) if np.hypot(*e1) >= np.hypot(*e2) else (e2, e1)
+        mid = box.mean(0)
+        axis = shapely.LineString([mid - long_ * 0.6, mid + long_ * 0.6]).intersection(g)
+        for part in getattr(axis, "geoms", [axis]):
+            if part.geom_type != "LineString" or part.length < min_len:
+                continue
+            width = float(np.clip(g.area / max(part.length, 1e-9), lo, hi))
+            out.append((np.asarray(part.coords), width, int(tree.nearest(part.centroid))))
+    return out
+
+
+def outline(area: shapely.Geometry, seed: int = 2) -> list[np.ndarray]:
+    """One closed bead around each edge of the region, starting at a random point."""
+    rng = np.random.default_rng(seed)
+    rings = []
+    for poly in getattr(area, "geoms", [area]):
+        for ring in [poly.exterior, *poly.interiors]:
+            pts = np.asarray(ring.simplify(0.02).coords)[:-1]
+            k = int(rng.integers(len(pts)))
+            pts = np.roll(pts, -k, axis=0)
+            rings.append(np.vstack([pts, pts[:1]]))
+    return rings
+
+
+def taper(lines: list[np.ndarray], spacing: list[np.ndarray], region: shapely.Geometry, length: float = 1.5,
+          start: float = 0.6) -> list[np.ndarray]:
+    """Thin each line's free ends (where a line starts or stops mid-surface) from `start` x
+    its width to full width over `length` mm, so new lines emerge instead of starting at full
+    width. Ends on the region's edge and closed loops keep full width."""
+    edge = region.boundary
+    out = []
+    for l, sp in zip(lines, spacing):
+        arc = np.r_[0, np.cumsum(np.hypot(*np.diff(l, axis=0).T))]
+        f = np.ones(len(l))
+        if np.hypot(*(l[-1] - l[0])) > 1e-6:  # open line
+            for end, d in ((l[0], arc), (l[-1], arc[-1] - arc)):
+                if shapely.distance(edge, shapely.Point(end)) > 0.6:
+                    f = np.minimum(f, start + (1 - start) * np.clip(d / length, 0, 1))
+        out.append(sp * f)
     return out
 
 
@@ -142,14 +239,17 @@ def order(lines: list[np.ndarray], psi_grid, simplify: float = 0.02) -> tuple[li
 
 
 def bands(layer: Layer, n: int) -> list[tuple[int, int, float]]:
-    """Split the print order into n bands of equal stream-function range (equal flux, as
-    dye streams would carry). Returns (first_line, end_line, filament_mm) per band."""
-    edges = np.linspace(layer.psi[0], layer.psi[-1] + 1e-9, n + 1)
+    """Split the print order into colour pieces: the window's outline (if any), then n bands
+    of equal label range (equal widths of the inlet, as dye streams released side by side
+    would be). Returns (first_line, end_line, filament_mm) per piece."""
     cum = np.concatenate([[0], layer.filament()])
-    out = []
+    f0 = layer.n_frame
+    out = [(0, f0, float(cum[f0]))] if f0 else []
+    psi = layer.psi[f0:]
+    edges = np.linspace(psi[0], psi[-1] + 1e-9, n + 1)
     for k in range(n):
-        a = int(np.searchsorted(layer.psi, edges[k], "left"))
-        b = int(np.searchsorted(layer.psi, edges[k + 1], "left")) if k < n - 1 else len(layer.psi)
+        a = f0 + int(np.searchsorted(psi, edges[k], "left"))
+        b = f0 + (int(np.searchsorted(psi, edges[k + 1], "left")) if k < n - 1 else len(psi))
         out.append((a, b, float(cum[b] - cum[a])))
     return out
 

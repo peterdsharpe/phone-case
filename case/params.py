@@ -129,9 +129,11 @@ class Case:
     flow_ridge_h: float = 0.45  # dye line height (3 layers)
     flow_cyl_h: float = 0.45  # the cylinder stands this much above the dye lines
     # Streamline top layer (see case/lbm.py for the flow, case/toolpath.py for the G-code)
+    stream_source: str = "dye"  # "dye": contours of the dye label (streaklines); "streamlines": instantaneous
+    dye_smooth: float = 1.2  # smooth the dye label at this scale (mm) before contouring: the print's resolution
     stream_h: float = 0.25  # the streamline layer's height (thicker = richer colour)
     stream_sep: float = 0.55  # line spacing; 0.6 mm wide lines at 0.25 mm layers
-    stream_phase: int = 4  # which of the 16 snapshots (they span ~1.7 shedding periods)
+    stream_phase: int = 4  # which of the 16 snapshots over one shedding period
     stream_bands: int = 12  # colour pieces in the cut list (equal stream-function ranges)
     base_layer: float = 0.25  # plate layers under the streamline layer (hidden, so thick)
     # Terraced topographic map

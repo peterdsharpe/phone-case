@@ -162,10 +162,11 @@ def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "pe
         f"`out/print/plate_streamlines_{tag}.gcode` is the plate's G-code with the streamline layer spliced in at "
         f"z = {lyr.z:g} mm ({lyr.h:g} mm thick): {len(lyr.lines)} lines, {length / 1000:.1f} m of path, "
         f"{info['filament_mm']:.0f} mm of filament, about {minutes:.0f} min. Coverage {cov:.1%}.", "",
-        "Cut list (equal stream-function bands, in print order). Add about 30 mm to the first piece for the "
+        "Cut list (bands of equal dye-label range, i.e. equal widths of the inlet, in print order). Add about 30 mm to the first piece for the "
         "purge and 80 mm to the last so the extruder can still grip it:", "",
         "| piece | filament (mm) | PETG plate | PLA plate |", "|---|---|---|---|",
-        *[f"| {k + 1} | {mm:.0f} | {toolpath.PALETTES['petg'][2][k % 4][0]} | {toolpath.PALETTES['pla_gold'][2][k % 4][0]} |"
+        *[f"| {k + 1}{' (outline)' if k == 0 and lyr.n_frame else ''} | {mm:.0f} | "
+          f"{toolpath.PALETTES['petg'][2][k % 4][0]} | {toolpath.PALETTES['pla_gold'][2][k % 4][0]} |"
           for k, (_, _, mm) in enumerate(bands)],
     ]
     stats = dict(stats)
@@ -258,11 +259,11 @@ def main(argv=None):
         render_all(b, pl, p, c, OUT / "renders")
         if stream:
             from .figures import streamline_previews, streamline_renders
-            from .streamflow import wake
+            from .streamflow import snapshot
 
             lyr, bands = stream
-            r = wake(p, c)
-            flow = (r["xs"], r["ys"], r["shots"][c.stream_phase])
+            r = snapshot(p, c, c.stream_phase)
+            flow = (r["xs"], r["ys"], r["shots"][0], r["dye"][0] if "dye" in r else None)
             streamline_previews(lyr, region, bands, p, c, OUT / "renders", flow=flow)
             streamline_renders(lyr, bands, b, pl, p, c, OUT / "renders")
         note(f"rendered at {time.time() - t0:.0f} s")
