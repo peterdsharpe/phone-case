@@ -51,7 +51,7 @@ Everything is Python and rebuilds with one command:
     <td><img src="out/renders/stream_back_pla_gold.jpg" alt="The same plate in gold, white, red and black PLA"></td>
   </tr>
   <tr>
-    <td>Each bead is as wide as the strip it fills, from 0.47 to 1.0 mm, so the layer covers the plate with no infill gaps.</td>
+    <td>Each bead is as wide as the strip it fills, from 0.47 to 1.0 mm.</td>
     <td>The same plate in PLA: gold, white, matte red and black. Brighter, but PLA softens near 55 °C.</td>
   </tr>
   <tr>
@@ -203,7 +203,7 @@ left zigzags.
 **Filling the plate.** Each line is nudged sideways toward the middle of its
 strip. Beads get the width of the strip they fill, free ends taper, one bead
 outlines the window, and a last pass fills any hole larger than 0.4 mm². That
-took coverage from 92.6% to 96.6%. Below, uncovered plate is red, before and
+took coverage from 92.6% to over 96%. Below, uncovered plate is red, before and
 after:
 
 <p align="center">
