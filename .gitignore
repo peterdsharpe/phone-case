@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .scratch/
+.ruff_cache/
 build/
 # regenerable with `python -m case.build` (large)
 out/cad/
@@ -9,3 +10,6 @@ out/gcode/
 
 # Full flow caches (all 16 snapshots, ~20 MB each); the snapshot the build uses is committed as data/snap_*.npz
 data/wake_*.npz
+
+# Elevation tiles for design="topo" (AWS Terrain Tiles), downloaded on first use
+data/tiles/

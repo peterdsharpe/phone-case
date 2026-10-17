@@ -1,230 +1,437 @@
-# Pixel 9 Pro XL case
+# A phone case printed along a turbulent wake
 
-A parametric, 3D-printable case for the Google Pixel 9 Pro XL, designed to
-absorb drops (especially corner hits from a bike-mount fall) and to be cheap to
-replace. It has two parts:
+A parametric, drop-first case for the Google Pixel 9 Pro XL, in two printed
+parts: a TPU bumper that takes the hits, and a PETG back plate. The plate's
+visible face is one layer of custom toolpaths. They trace dye through a
+simulated turbulent wake: the wake of air flowing past the phone's own camera
+bar. Short pieces of filament, fed into the printer one after another, become
+streams of dye.
 
-- **Bumper (TPU)**: side walls, front lip, thick corners with air pockets, and
-  a rear rim that holds the plate in. It takes the hits and wears out first.
-- **Back plate (PETG)**: covers the back glass and has the raised camera collar
-  built in. Its visible face is one extra print layer whose lines follow dye
-  streaks in a simulated turbulent wake behind the camera collar. Feed the
-  extruder short pieces of different colours and the colours run along the
-  streaks, like dye in a water tunnel.
+<p align="center">
+  <img src="out/renders/stream_back_petg.jpg" width="49%" alt="The case from the back: black, white and gray dye streams swirl down the plate below the camera bar">
+  <img src="out/renders/stream_wake_closeup.jpg" width="49%" alt="Close-up of the printed beads in raking light, rolled up into vortices">
+</p>
 
-![Back, PETG palette](out/renders/stream_back_petg.png)
+<p align="center">
+  <img src="out/renders/streamline_pipeline.png" width="100%" alt="Four panels: vorticity of the simulated wake, the dye as stripes, the toolpaths, and the predicted colors">
+</p>
 
-| | |
-|---|---|
-| ![Back, PLA palette](out/renders/stream_back_pla_gold.png) | ![Front](out/renders/front.png) |
-| ![Collar and the flow parting around it](out/renders/stream_collar_closeup.png) | ![Vortex core, raking light](out/renders/stream_wake_closeup.png) |
+From simulation to plastic: a lattice-Boltzmann simulation at a Reynolds
+number of 30,000 with the camera collar as the obstacle (1), a dye label carried
+by the flow (2), contours of that label as toolpaths (3), and the colors of the
+filament pieces as they will blend in the hotend (4).
 
-## Why two parts
+> [!NOTE]
+> **Status:** designed, simulated, sliced and checked in software, but not yet
+> printed: the phone is still on its way. Its dimensions come from Google's
+> published size and from published cases. [MEASURE.md](MEASURE.md) lists
+> what to check with calipers, and two short test prints check the fit.
 
-The camera bar stands 3.6 mm proud of the back glass. In a one-piece case
-printed back-down, a raised collar around it would need support under the whole
-back. The popular one-piece TPU cases avoid that with a flat back about 4 mm
-thick, which makes the phone 14–15 mm thick and puts the wireless charger 4 mm
-away. Printing the plate face-up instead lets the collar grow upward with no
-support. The back is 1.5 mm thick (1.25 mm under the rim), so Qi pads still
-work.
+Everything is Python and rebuilds with one command:
 
-The plate isn't bonded to the TPU. The rim's 45° underside closes over the
-plate's bevelled edge, and the phone presses the plate against it. TPU–PETG
-adhesion doesn't matter here, and you can swap or reprint either part on its own.
+- CAD in [build123d](https://github.com/gumyr/build123d), from named parameters in `case/params.py`
+- a lattice-Boltzmann flow solver on the GPU (numba-cuda), with a CPU fallback
+- toolpath generation and a G-code splice for the custom layer
+- PrusaSlicer, driven from the command line, for everything else
+- [PyVista](https://pyvista.org) renders with every printed bead modeled
 
-## Protection
+## Gallery
+
+<table>
+  <tr>
+    <td width="50%"><img src="out/renders/stream_plan_petg.jpg" alt="The back, straight on"></td>
+    <td width="50%"><img src="out/renders/stream_collar_closeup.jpg" alt="The camera collar with the flow parting around it"></td>
+  </tr>
+  <tr>
+    <td>Straight on. The flow comes in from the top and rolls up below the camera bar.</td>
+    <td>Under the collar, in raking light: the shear layers break into small eddies.</td>
+  </tr>
+  <tr>
+    <td><img src="out/renders/stream_bead_detail.jpg" alt="Bead detail"></td>
+    <td><img src="out/renders/stream_back_pla_gold.jpg" alt="The same plate in gold, white, red and black PLA"></td>
+  </tr>
+  <tr>
+    <td>Each bead is as wide as the strip it fills, from 0.47 to 1.0 mm, so the layer covers the plate with no infill gaps.</td>
+    <td>The same plate in PLA: gold, white, matte red and black. Brighter, but PLA softens near 55 °C.</td>
+  </tr>
+  <tr>
+    <td><img src="out/renders/front.jpg" alt="The front of the case"></td>
+    <td><img src="out/renders/corner_closeup.jpg" alt="Corner and power button"></td>
+  </tr>
+  <tr>
+    <td>The front: a 1.4 mm lip all round, beveled low on the long sides for edge gestures.</td>
+    <td>Thick corners, where drops land, with an air pocket behind the TPU.</td>
+  </tr>
+  <tr>
+    <td><img src="out/renders/camera_closeup.jpg" alt="Camera collar"></td>
+    <td><img src="out/renders/exploded.jpg" alt="Exploded view: phone, plate, bumper"></td>
+  </tr>
+  <tr>
+    <td>The collar stands 1 mm above the camera bar, so the phone can lie on its back.</td>
+    <td>Two parts. The bumper's rim holds the plate in, with no glue.</td>
+  </tr>
+</table>
+
+## How it was made
+
+### Measuring a phone that hadn't arrived
+
+The design started before the phone was delivered. Google publishes the
+outline (76.6 × 162.8 × 8.5 mm, with 12 mm corners) but not where the buttons,
+ports and camera bar sit. Those positions come from Pixel 9 Pro XL cases
+published on Printables: one includes its author's caliper measurements, and one says it
+was built from Google's CAD. Most positions agree within about 1 mm, and
+`case/params.py` records the range next to each value. The build checks that
+phone, bumper and plate don't overlap, and draws cross-sections of the fit:
+
+<p align="center">
+  <img src="out/renders/sections.png" width="85%" alt="Cross-sections of phone, bumper and plate">
+</p>
+
+### Two parts, because of the camera bar
+
+The camera bar stands 3.6 mm proud of the back glass. A one-piece case printed
+back-down needs either support under a raised collar or a flat back about 4 mm
+thick. That second option is the common one, and it makes the phone 14–15 mm
+thick and moves a wireless charger 4 mm away. Two parts avoid both. The plate
+prints face-up, so its collar grows straight up with no support, and it is
+1.5 mm thick, so Qi charging still works. The plate isn't bonded to the TPU:
+the bumper's rim closes over the plate's 45° beveled edge, and the phone holds
+it there. Either part can be reprinted on its own.
 
 | Feature | Value | Why |
 |---|---|---|
-| Side wall | 1.4 mm TPU | two 0.7 mm perimeters from the 0.6 mm nozzle |
+| Side wall | 1.4 mm TPU | two 0.7 mm perimeters from a 0.6 mm nozzle |
 | Corners | 2.4 mm TPU plus a 1.3 mm air pocket | a corner hit compresses TPU into the pocket before it reaches the glass |
-| Front lip | 1.4 mm above the screen, all round | face-down falls and slides land on the lip, not the glass |
-| Long-side lips | 45° bevel, 0.5 mm high at the inner edge | edge-swipe gestures |
+| Front lip | 1.4 mm above the screen | face-down falls and slides land on the lip, not the glass |
+| Long-side lips | 45° bevel, 0.5 mm high at the inner edge | room for edge-swipe gestures |
 | Rear rim | 0.6 mm proud of the plate | protects the plate edge and the glass corners |
-| Camera collar | 1.0 mm above the camera bar | the phone can lie on its back; the inner top edge is bevelled against flash glare |
-| Fit | 0.10 mm side clearance, 0 in thickness | snug; TPU stretches and loosens a little with use |
+| Camera collar | 1.0 mm above the camera bar | the phone can lie on its back; the inner top edge is beveled against flash glare |
+| Fit | 0.10 mm side clearance, none in thickness | snug, because TPU loosens a little with use |
 
-The cross-sections in `out/renders/sections.png` show each of these against the
-phone model.
+### The back, take 1: a topographic map
 
-## What to print
+The first plate showed Mount Rainier as raised terraces, from the public AWS
+Terrain Tiles, with a filament change partway up for a second color. Other
+mountains, or procedural terrain, were one parameter away. At phone scale the
+terraces were hard to read as a mountain.
 
-Everything is in `out/print/`. The `.3mf` files are PrusaSlicer projects with all
-settings included. Open one, check the filament and sheet, and print.
+<table>
+  <tr>
+    <td width="30%"><img src="docs/img/process/topo_plate.jpg" alt="Two-tone topographic plate"></td>
+    <td width="70%"><img src="docs/img/process/topo_maps.jpg" alt="Mount Rainier, procedural terrain, Half Dome and the Matterhorn as terrace maps"></td>
+  </tr>
+</table>
+
+### Take 2: a Kármán vortex street
+
+Next came fluid dynamics: dye released from ports on a small cylinder, rolled up
+into the alternating vortices of a Kármán street and printed as a raised relief
+(left: the streaklines; right: the relief).
+
+<p align="center">
+  <img src="docs/img/process/karman.jpg" width="60%" alt="Streaklines behind a cylinder, and the printable relief made from them">
+</p>
+
+Two ideas replaced it. Make the camera collar itself the obstacle and simulate
+the flow over the real phone back. And instead of printing a raised shape,
+print the plate's last layer with its toolpaths running along the flow.
+
+### Take 3: streamlines of the simulated wake
+
+A lattice-Boltzmann solver (`case/lbm.py`) simulates air coming down the phone
+and past the collar. The phone's back is a window into open flow: the domain is
+five collar-widths wide with periodic sides, because walls at the phone's edges
+would block 97% of the channel. At a Reynolds number of 1,000 the collar sheds
+a clean vortex street. The first version traced evenly spaced streamlines of
+one moment of it (the Jobard–Lefer method), with each bead as wide as its gap.
+
+<p align="center">
+  <img src="docs/img/process/streamline_phases.jpg" width="100%" alt="Vorticity at eight moments of the shedding cycle at Re 1000, with the streamline toolpaths below each">
+</p>
+
+<table>
+  <tr>
+    <td width="30%"><img src="docs/img/process/v1_plate.jpg" alt="The first streamline plate"></td>
+    <td width="70%">It looked like electric field lines around charges.
+    Instantaneous streamlines of a smooth 2-D flow always do: they show where
+    the flow is going at one instant, not where it has been.</td>
+  </tr>
+</table>
+
+### Take 4: dye
+
+What looks like fluid in flow photographs is dye. Dye remembers where the flow
+has been, so it rolls up into spirals and stretches into filaments. The solver
+now carries a dye label: each parcel of fluid keeps the x position where it
+entered. Contours of that label are the streaklines of a row of dye ports
+across the inlet, and contours of one field never cross, so they make clean
+toolpaths.
+
+<p align="center">
+  <img src="docs/img/process/dye_stripes.jpg" width="100%" alt="The dye label drawn as stripes at four moments">
+</p>
+
+For turbulence, the Reynolds number went up to 30,000, with a Smagorinsky
+subgrid model on 9.8 million lattice cells (0.125 mm, 594 cells across the
+collar). That runs on the GPU through numba-cuda, at about 16 billion cell
+updates per second. Below, an early sweep of Re 3,000, 10,000, 30,000 and
+100,000, from before the stability fix described further down:
+
+<p align="center">
+  <img src="docs/img/process/re_sweep.jpg" width="100%" alt="Dye contours at Re 3000, 10000, 30000 and 100000">
+</p>
+
+### From dye to toolpaths
+
+**Where new lines start.** Where the flow spreads, contours pull apart and new
+lines have to begin. If they all begin at once, they form a visible front. So
+the label is contoured at thousands of fine levels, and each level is drawn
+only where the local spacing calls for another line: level *m* appears where the
+fine-level density *f* = Δ / (|∇*s*| *d*) exceeds *m* bit-reversed, a
+one-dimensional ordered dither. New lines then start one at a time at scattered
+places, with hysteresis so they don't flicker on and off. Lines run unbroken
+until they leave the window or close on themselves, and closed loops start at
+random points so their seams don't line up. Below, each line end is a red dot;
+the right panel is an idea that was dropped: blending in the stream function
+left zigzags.
+
+<p align="center">
+  <img src="docs/img/process/dither.jpg" width="85%" alt="Toolpaths with line ends marked in red, for three settings, with zoomed insets">
+</p>
+
+**Filling the plate.** Each line is nudged sideways toward the middle of its
+strip. Beads get the width of the strip they fill, free ends taper, one bead
+outlines the window, and a last pass fills any hole larger than 0.4 mm². That
+took coverage from 92.6% to 96.6%. Below, uncovered plate is red, before and
+after:
+
+<p align="center">
+  <img src="docs/img/process/gaps.jpg" width="70%" alt="Uncovered areas in red, before and after the relaxation and outline">
+</p>
+
+**Print order.** Lines print in order of dye label, each in the flow direction,
+so colors fed in sequence come out as dye streams.
+
+### Picking the moment
+
+The solver saves 16 snapshots over one shedding period. Here are six of them at
+Re 30,000. The plate uses phase 8: the shear layer under the collar winds into a
+spiral and breaks into eddies toward the bottom.
+
+<p align="center">
+  <img src="docs/img/process/phase_candidates.jpg" width="100%" alt="Six candidate moments of the wake, as predicted colors">
+</p>
+
+### A bug spotted by eye, confirmed by FFT
+
+An earlier version of the plate used a flawed flow. Its vorticity had a
+hatched texture near the strongest vortex core:
+
+<p align="center">
+  <img src="docs/img/process/artifact.jpg" width="45%" alt="Striped grid-scale noise around a vortex core">
+</p>
+
+Spectra make that measurable. In a healthy 2-D flow, the enstrophy spectrum
+(vorticity squared, by wavenumber) falls steeply toward the grid scale, and the
+velocity field has almost no divergence. This one piled up enstrophy just below
+the grid's Nyquist wavenumber, and its divergence peaked there:
+
+<p align="center">
+  <img src="docs/img/process/spectra_before.jpg" width="100%" alt="Shell spectra with a pile-up near Nyquist, the 2-D spectrum, and a map of the grid-scale residual">
+</p>
+
+The noise formed compact wave packets about five lattice cells (0.6 mm)
+across, lined up with the grid. Their spectra form spikes on the axes, here in
+the wake far from any wall:
+
+<p align="center">
+  <img src="docs/img/process/wave_packet.jpg" width="100%" alt="A wave packet in the residual map and its spikes in the 2-D spectrum">
+</p>
+
+The evidence points to speed. Vortex edges reached 4.5 times the inflow speed,
+a lattice velocity of 0.11. Regularized lattice-Boltzmann goes unstable at high
+wavenumbers when the local speed is that high and the viscosity that low. Bulk
+viscosity (Dellar, 2001) and a stronger subgrid model helped but did not cure
+it. Halving the lattice speed did, at twice the number of steps. Each run below
+is all 16 snapshots, checked at full lattice resolution:
+
+| Reynolds number | Lattice speed | Smagorinsky constant | Bulk viscosity | Healthy snapshots |
+|---|---|---|---|---|
+| 30,000 | 0.025 | 0.10 | yes | 0 of 16 |
+| 30,000 | 0.025 | 0.17 | yes | 0 of 16 |
+| **30,000** | **0.0125** | **0.17** | **yes** | **15 of 16** |
+| 10,000 | 0.025 | 0.10 | yes | 15 of 16 |
+| 10,000 | 0.025 | 0.17 | yes | 13 of 16 |
+| 10,000 | 0.0125 | 0.17 | yes | 16 of 16 |
+
+The fixed flow takes 9 minutes on the GPU. Every run now records its spectra
+at lattice resolution, and the build refuses a snapshot that fails: more than 1%
+of the middle band's enstrophy in the top band, or divergence variance above
+0.1% of the vorticity variance. It also plots the evidence for the snapshot in
+use (`out/renders/flow_spectra.png`). The plate's snapshot passes with a top
+band of 10⁻⁶ and divergence of 2 × 10⁻⁵:
+
+<p align="center">
+  <img src="docs/img/process/spectra_after.jpg" width="100%" alt="Clean spectra: a steep fall to the grid scale, an isotropic 2-D spectrum, and only physical filaments in the residual">
+</p>
+
+### Splicing it into the G-code
+
+PrusaSlicer slices the plate with layer-range modifiers: a hidden base in
+0.25 mm layers, a 0.25 mm layer at z = 1.5 mm, and the collar in 0.15 mm
+layers above. The build replaces that one layer with the flow toolpaths, between
+two color changes (M600). Each extrusion sets its own feed rate, travel moves
+retract and lift, and the slicer's retraction state is restored at the end. A
+checker reads the result back:
+
+- 25,789 extrusions, all at 1800 mm/min and z = 1.5 mm, all inside the window
+- no travel longer than 1 mm without a lift
+- 793 lines, 15.7 m of path and 956 mm of filament, in about 16 minutes
+
+<table>
+  <tr>
+    <td width="35%"><img src="docs/img/process/splice_check.jpg" alt="The spliced layer inside the slicer's perimeters"></td>
+    <td width="65%"><img src="out/renders/streamline_colors.png" alt="Predicted colors for the PETG and PLA palettes"></td>
+  </tr>
+  <tr>
+    <td>Alignment check, from the first version: the spliced layer (blue) sits inside the slicer's perimeters (red).</td>
+    <td>Predicted colors, with each change of filament blending over about 12 mm in the hotend.</td>
+  </tr>
+</table>
+
+## Print it
+
+Everything is in `out/print/`. The `.3mf` files are PrusaSlicer projects with
+all settings included. The times are PrusaSlicer 2.9.6 estimates for an
+Original Prusa MK3S+ with a 0.6 mm nozzle.
 
 | File | Material | Time | Filament | Notes |
 |---|---|---|---|---|
-| `test_fit_band_tpu.3mf` | TPU | 45 min | 7 g | Print first. The front 6 mm of the bumper: checks outline, corners, lip, buttons, ports |
-| `test_camera_petg.3mf` | PETG | 18 min | 4 g | Top of the plate: checks the camera collar |
+| `test_fit_band_tpu.3mf` | TPU | 45 min | 7 g | Print first: the front 6 mm of the bumper checks outline, corners, lip, buttons and ports |
+| `test_camera_petg.3mf` | PETG | 18 min | 4 g | The top of the plate: checks the camera collar |
 | `bumper_tpu.3mf` | TPU | 1 h 30 min | 13 g | |
-| `plate_streamlines_petg.gcode` | PETG | 1 h | 21 g | The plate with the streamline layer. G-code, not a project: see below |
-| `plate_streamlines_pla.gcode` | PLA | 1 h | 21 g | The same in PLA, for gold, red and clear pieces. PLA softens near 55 °C |
-| `plate_petg.3mf` | PETG | 45 min | 18 g | The plate without the streamline layer: a plain flat back |
+| `plate_streamlines_petg.gcode` | PETG | 1 h | 21 g | The plate with the streamline layer (G-code, not a project; see below) |
+| `plate_streamlines_pla.gcode` | PLA | 1 h | 21 g | The same in PLA for the brighter palette |
+| `plate_petg.3mf` | PETG | 45 min | 18 g | A plain flat plate, without the streamline layer |
 
-The times are PrusaSlicer 2.9.6 estimates for an Original Prusa MK3S+ with a 0.6
-mm nozzle. Plain STLs are next to the projects, and the settings are also in
+Plain STLs sit next to the projects, and the settings are also in
 `out/profiles/*.ini` (File > Import > Import Config).
 
-### Settings and tips
+**The streamline layer**, with the filament sensor off:
 
-- **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile. Temperatures are raised
-  for a hardened-steel nozzle: TPU 245 °C, PETG 250 °C.
+1. Start `plate_streamlines_petg.gcode` with black or Galaxy Black PETG loaded.
+2. Before the color change, turn the filament sensor off (Settings > Fil.
+   sensor > Off). It would read each gap between pieces as a run-out.
+3. About 38 min in, at 1.5 mm, the printer stops for a color change. Load the
+   first piece, let it purge clean, and confirm.
+4. Keep feeding: as the tail of each piece reaches the extruder, push the next
+   one in behind it, end to end. Cut the ends square.
+5. At the second color change, load black again for the collar, and turn the
+   sensor back on.
+
+The cut list, with the length and color of each piece, is in
+[`out/REPORT.md`](out/REPORT.md). Add about 30 mm to the first piece for the
+purge and 80 mm to the last so the extruder can still grip it. To check the
+G-code first, open it in PrusaSlicer's G-code viewer.
+
+<details>
+<summary><b>Settings and tips</b></summary>
+
+- **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile. Temperatures are
+  raised for a hardened-steel nozzle: TPU 245 °C, PETG 250 °C, PLA 225 °C.
 - **TPU** (`Generic FLEX` preset, flow capped at 2 mm³/s): dry it first (about
   50 °C for 4–6 h). Loosen the extruder idler a little if it skips. If your TPU
   is softer than 95A, lower `filament_max_volumetric_speed` to 1.2.
-- **TPU looks**: 0.15 mm layers smooth the 45° lip and the rim fillet for 2–3
+- **TPU finish**: 0.15 mm layers smooth the 45° lip and the rim fillet for 2–3
   min more (TPU prints at its flow limit, so thinner layers barely slow it).
-  Concentric lines on the lip and rim faces follow the outline instead of
-  crossing the corners diagonally, and scarf seams hide the outer wall's seam
-  where the contour is smooth. No ironing: TPU smears.
-- **PETG** (`Prusament PETG @0.6 nozzle` preset): the hidden base prints in
-  0.25 mm layers, the streamline layer is 0.25 mm, and the collar is 0.15 mm.
-  The heights are layer-range modifiers in the project, so you can edit them in
-  the GUI. No ironing: it would flatten the streamline beads.
+  Concentric top and bottom lines follow the outline, and scarf seams hide the
+  outer wall's seam where the contour is smooth. No ironing: TPU smears.
+- **PETG** (`Prusament PETG @0.6 nozzle` preset): the layer heights are
+  layer-range modifiers in the project, so you can edit them in the GUI. No
+  ironing: it would flatten the streamline beads.
 - **Sheet**: TPU and PETG both stick hard to smooth PEI. Use glue stick as a
-  release layer, or use a textured sheet. The bumper prints lip-down, and the
-  plate prints inner-face-down, so the sheet sets the finish on the plate's
-  inside face.
-- **No supports** on either part.
-- **Enclosure**: leave it open or vented. Neither material needs the heat, and
-  a warm enclosure can cause heat creep with TPU on the MK3S.
+  release layer, or a textured sheet. The bumper prints lip-down, and the plate
+  prints inner face down.
+- **No supports** on either part. Leave an enclosure open or vented: neither
+  material needs the heat, and a warm enclosure can cause heat creep with TPU.
 
-## The streamline layer
+</details>
 
-**The flow.** A 2-D lattice-Boltzmann simulation (`case/lbm.py`, on the GPU with
-numba-cuda, or on the CPU) of air coming down past the camera collar at a
-Reynolds number of 30,000 on its 74 mm width, with 594 lattice cells across the
-collar and a Smagorinsky subgrid model. The phone's back is a window into open
-flow: the domain is five collar-widths wide, because walls at the phone's edges
-would block 97% of the channel. The shear layers from the collar's ends roll up
-into vortices that pair, merge and break into smaller eddies.
+**Assembly.** Put the plate into the bumper from the front, collar first, so the
+collar pokes out through the rim at the back: bow the plate slightly and stretch
+the TPU over one end, then the other. Press the phone in the same way, bottom end
+first, then peel the lip over the top corners. To take it off, push the phone out
+through the front from the camera window.
 
-**Checking the flow for numerical noise.** At this Reynolds number the lattice
-is almost inviscid, and it can grow grid-scale noise: striped wave packets about
-five cells (0.6 mm) across, which the print would show as texture. Three
-settings keep it out. The lattice inflow speed is 0.0125, so the fastest vortex
-edges stay near 0.06; at 0.025 they reached 0.11 and the packets grew. The
-Smagorinsky constant is 0.17. A separate bulk relaxation damps compression
-waves (Dellar 2001). Each snapshot's vorticity and divergence spectra are
-recorded at lattice resolution (`case/spectra.py`). The build refuses a snapshot
-whose enstrophy piles up near the grid scale (the top band above 1% of the
-middle band) or whose divergence variance exceeds 0.1% of its vorticity
-variance. At Re 30,000, 15 of the 16 snapshots pass; the default is phase 8.
-`out/renders/flow_spectra.png` shows the spectra and a map of the grid-scale
-residual for the snapshot in use.
-
-**Why dye, not streamlines.** An instantaneous streamline of a smooth 2-D field
-looks like a field line from electrostatics. What reads as fluid in flow
-photographs is dye: it records the flow's history, so it rolls up and folds into
-filaments. The simulation carries a dye label (each parcel keeps the x at which
-it entered), and the toolpaths are contours of that label, which are exactly the
-streaklines of a rake across the inlet. Contours of one field never cross.
-
-**The toolpaths** (`case/contourpaths.py`). The label, smoothed to 1.2 mm, is
-contoured at thousands of fine levels, and each level is drawn only where the
-local spacing calls for another line: level m is visible where the fine-level
-density f = Δ / (|∇s| d) exceeds its threshold, which is level m's index
-bit-reversed (an ordered dither). Lines run unbroken until they leave the window
-or close on themselves; where the dye spreads, new lines start one by one at
-scattered places instead of in a row, with hysteresis so they do not flicker on
-and off. Each line is then nudged sideways toward the middle of its strip, beads
-get the width of the strip they fill (0.47 to 1.0 mm), free ends taper, closed
-loops start at a random point, one bead outlines the window, and a final pass
-fills the larger holes. Lines print in order of dye label, each in the flow
-direction, so colour fed in sequence becomes dye streams.
-
-To print it:
-
-1. Copy `plate_streamlines_petg.gcode` to the SD card and print it with black
-   or Galaxy Black PETG loaded.
-2. Before the colour change, turn the filament sensor off (Settings > Fil.
-   sensor > Off). It would see each gap between pieces as a run-out.
-3. About 38 min in, at 1.5 mm, the printer stops for a colour change (M600).
-   Load piece 1, let it purge clean, and confirm.
-4. Keep feeding: as the tail of each piece reaches the extruder's intake, push
-   the next one in behind it, end to end. Cut the ends square.
-5. At the second colour change, load black again for the collar, and turn the
-   sensor back on.
-
-The cut list, with the length and colour of each piece, and the layer's length
-and time are in `out/REPORT.md`. The colours blend over 1–2 cm of filament in
-the hotend, which the previews model (`out/renders/streamline_colors.png`). To
-check the G-code before printing, open it in PrusaSlicer's G-code viewer:
-`prusa-slicer --gcodeviewer out/print/plate_streamlines_petg.gcode`.
-
-## Assembly
-
-1. Put the plate into the bumper from the **front**, collar first, so the collar
-   pokes out through the rim at the back. The plate is a little larger than the
-   lip opening: bow it slightly and stretch the TPU over one end, then the other.
-2. Press the phone in the same way: bottom end first, then peel the lip over
-   the top corners.
-3. To take it off, push the phone out through the front from the camera
-   window.
-
-## Before the phone arrives: what's measured and what isn't
-
-The phone model in `case/params.py` uses Google's published size, plus
-positions measured from ten published Pixel 9 Pro XL cases. One of those cases
-came with its author's caliper measurements, and one claims to be built from
-Google's own CAD. Most positions agree within about 1 mm, and the file lists the
-range found next to each value. **[MEASURE.md](MEASURE.md)** is a 15-item caliper checklist and
-explains how to use the two test prints.
-
-## Changing the design
-
-All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
-`Case` for the case. After editing, rebuild everything:
+## Build it
 
 ```bash
-uv sync                        # once
-uv run python -m case.build    # about 20 s: geometry, STL/STEP, PrusaSlicer projects, slicing, streamline G-code, renders
+uv sync                        # Python 3.12 or 3.13
+uv run python -m case.build    # about 30 s: geometry, STL/STEP, slicing, streamline G-code, renders
+uv sync --extra gpu            # optional: an NVIDIA GPU, for new flow simulations
 ```
 
-Some useful knobs:
+- `--no-slice` skips PrusaSlicer and the streamline layer, and `--no-render`
+  skips the renders.
+- The build finds PrusaSlicer on the PATH or as a Flatpak. If yours lives
+  elsewhere, set `PRUSASLICER` to its command and `PRUSASLICER_PROFILES` to its
+  `PrusaResearch.ini`.
+- The flow snapshot in use is committed (`data/snap_*.npz`), so the build needs
+  no GPU. A new Reynolds number or resolution takes about 9 minutes on an RTX
+  5090, or many hours on a CPU.
+- The build writes sizes, masses, print times, the spectral check and the cut
+  list to `out/REPORT.md`, and STEP files of each part and of the whole assembly
+  to `out/cad/`.
+
+All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
+`Case` for the case. Some useful ones:
 
 - `Case.fit`: side clearance. Raise it by 0.05 if the fit band is too tight.
-- `Case.design`: `"streamlines"` (the default), `"karman"` (a raised Kármán
-  vortex street behind a small cylinder), `"topo"` (a terraced topographic
-  map), or `"none"`.
-- `Case.stream_phase`: which of 16 snapshots of the shedding cycle to use;
-  `Case.stream_bands`: how many colour pieces; `Case.dye_smooth`: how fine the
-  dye structure is; `Case.stream_source = "streamlines"` for instantaneous
-  streamlines instead of dye. `lbm.Wake` sets the Reynolds number and the
-  resolution. The snapshot in use is committed (`data/snap_*.npz`); any other
-  takes about 9 min on the GPU (`uv sync --extra gpu`) to simulate.
-- `Case.topo_source`: the map, for `design="topo"`. Use a key of
-  `case/topo.PLACES` (`rainier`, `half-dome`, `matterhorn`, `fuji`,
-  `mt-washington`, `grand-canyon`), any `"lat,lon,width_km"`, or
-  `"procedural:<seed>"`. Elevation comes from the public AWS Terrain Tiles and
-  is cached in `data/`.
-- `Case.two_color_level`: which relief layer the filament swap happens at in
-  the two-colour relief plates.
-- `Case.lip_h`, `lip_side`, `lip_end`: lip height and how far it reaches over
-  the screen.
-- `Case.outer_corner_r`, `corner_relief_r`: corner thickness and air pocket.
-- `Case.grip`: flutes on the long sides.
-
-The build checks that the bumper, plate and phone don't overlap. It slices
-every project with PrusaSlicer and writes the times and masses to
-`out/REPORT.md`. The CAD is in `out/cad/` as STEP: the whole assembly with the
-phone, or each part on its own.
+- `Case.design`: `"streamlines"` (the default), `"karman"`, `"topo"`, or `"none"`.
+- `Case.stream_phase`, `stream_bands`, `dye_smooth`: which snapshot, how many
+  color pieces, and how fine the dye structure is.
+  `Case.stream_source = "streamlines"` brings back the field-line look.
+- `lbm.Wake`: Reynolds number, resolution and lattice speed of the flow.
+- `Case.topo_source`, for `design="topo"`: a key of `case/topo.PLACES`
+  (`rainier`, `half-dome`, `matterhorn`, `fuji`, `mt-washington`,
+  `grand-canyon`), any `"lat,lon,width_km"`, or `"procedural:<seed>"`.
+- `Case.lip_h`, `lip_side`, `lip_end`, `outer_corner_r`, `corner_relief_r`,
+  `grip`: lips, corners and grip flutes.
 
 ## Code map
 
 | File | Contents |
 |---|---|
 | `case/params.py` | every dimension, with sources and ranges |
-| `case/phone.py` | Pixel 9 Pro XL reference model |
-| `case/bumper.py` | TPU bumper |
-| `case/plate.py` | back plate, camera collar, relief |
+| `case/phone.py`, `bumper.py`, `plate.py` | the phone model, the TPU bumper, the back plate and collar |
 | `case/lbm.py`, `lbm_gpu.py`, `streamflow.py` | lattice-Boltzmann flow and dye past the collar (CPU and GPU) |
+| `case/spectra.py` | the spectral health check |
 | `case/contourpaths.py` | dithered contours of the dye: the toolpaths |
+| `case/toolpath.py`, `streamplate.py` | relaxation, bead widths, gap fill, color mixing and the G-code splice |
 | `case/streamtrace.py` | evenly spaced instantaneous streamlines (the `streamlines` source) |
-| `case/toolpath.py`, `streamplate.py` | streamline layer: relaxation, bead widths, gap fill, G-code splice, colour mixing |
-| `case/flow.py` | Kármán street behind a cylinder (the `karman` relief) |
-| `case/topo.py` | elevation data and terrace generation |
+| `case/flow.py`, `topo.py` | the Kármán and topographic designs |
 | `case/slicer.py` | PrusaSlicer presets (flattened from Prusa's bundle) and projects |
 | `case/build.py` | builds every output |
-| `case/figures.py`, `render.py`, `sections.py` | renders and cross-sections (software OpenGL; no GPU) |
+| `case/figures.py`, `render.py`, `sections.py` | renders and cross-sections (software OpenGL) |
+
+## Credits
+
+The phone geometry was cross-checked against these Pixel 9 Pro XL models on
+Printables:
+[984009](https://www.printables.com/model/984009),
+[1036120](https://www.printables.com/model/1036120),
+[1067953](https://www.printables.com/model/1067953),
+[991572](https://www.printables.com/model/991572),
+[1178004](https://www.printables.com/model/1178004),
+[1019071](https://www.printables.com/model/1019071),
+[983553](https://www.printables.com/model/983553),
+[982903](https://www.printables.com/model/982903) and
+[1446438](https://www.printables.com/model/1446438).
+Elevation data for the topographic design comes from the
+[AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/), downloaded on
+first use.
+
+## License
+
+[MIT](LICENSE).

@@ -48,25 +48,25 @@ def render_all(b, plate_part, p: Phone, c: Case, out: pathlib.Path) -> None:
         _phone(pl, parts, screen=False)
         add(pl, mb, COLORS["tpu"], specular=0.3)
         _plate(pl, mp, c, scheme)
-        shoot(pl, str(out / f"back_{scheme}.png"), back_cam, zoom=1.0)
+        shoot(pl, str(out / f"back_{scheme}.jpg"), back_cam, zoom=1.0)
 
     pl = plotter()
     _phone(pl, parts)
     add(pl, mb, COLORS["tpu"], specular=0.3)
-    shoot(pl, str(out / "front.png"), front_cam, zoom=1.0)
+    shoot(pl, str(out / "front.jpg"), front_cam, zoom=1.0)
 
     # Camera-end close-up from the back.
     pl = plotter()
     _phone(pl, parts, screen=False)
     add(pl, mb, COLORS["tpu"], specular=0.3)
     _plate(pl, mp, c, "galaxy")
-    shoot(pl, str(out / "camera_closeup.png"), [(-90, 0, -160), (5, 52, -2), UP], zoom=0.75, fit=False)
+    shoot(pl, str(out / "camera_closeup.jpg"), [(-90, 0, -160), (5, 52, -2), UP], zoom=0.75, fit=False)
 
     # Corner close-up from the front (lip, corner bumper, buttons).
     pl = plotter()
     _phone(pl, parts)
     add(pl, mb, COLORS["tpu"], specular=0.3)
-    shoot(pl, str(out / "corner_closeup.png"), [(190, 75, 170), (30, 52, 4), UP], zoom=0.55, fit=False)
+    shoot(pl, str(out / "corner_closeup.jpg"), [(190, 75, 170), (30, 52, 4), UP], zoom=0.55, fit=False)
 
     if relief:  # the plate alone, relief tinted by height (the print itself is one or two colours)
         _relief_tint(plotter(), mp, c, out)
@@ -80,7 +80,7 @@ def _relief_tint(pl, mp, c: Case, out: pathlib.Path) -> None:
     m["height"] = h
     pl.add_mesh(m, scalars="height", cmap="gist_earth", clim=(-0.25 * hmax, hmax * 1.1),
                 smooth_shading=False, specular=0.2, ambient=0.25, show_scalar_bar=False)
-    shoot(pl, str(out / "plate_relief.png"), [(-30, -25, -330), (0, -4, -2), UP], zoom=1.05)
+    shoot(pl, str(out / "plate_relief.jpg"), [(-30, -25, -330), (0, -4, -2), UP], zoom=1.05)
 
 
 def _exploded_and_layout(b, mb, mp, plate_part, parts, p: Phone, c: Case, out: pathlib.Path) -> None:
@@ -88,7 +88,7 @@ def _exploded_and_layout(b, mb, mp, plate_part, parts, p: Phone, c: Case, out: p
     add(pl, mb, COLORS["tpu"], specular=0.3)
     _plate(pl, mp, c, "galaxy", dz=-35)
     _phone(pl, parts, dz=35)
-    shoot(pl, str(out / "exploded.png"), [(-300, -200, -120), (0, 0, 0), (0, 0, 1)], zoom=1.1)
+    shoot(pl, str(out / "exploded.jpg"), [(-300, -200, -120), (0, 0, 0), (0, 0, 1)], zoom=1.1)
 
     # Print layout on an MK3 bed (250 x 210).
     from .build import to_print_bumper, to_print_plate
@@ -100,7 +100,7 @@ def _exploded_and_layout(b, mb, mp, plate_part, parts, p: Phone, c: Case, out: p
     add(pl, bed, COLORS["bed"], specular=0.1)
     add(pl, pb, COLORS["tpu"], specular=0.3)
     add(pl, pp, COLORS["galaxy"], specular=0.7)
-    shoot(pl, str(out / "print_layout.png"), [(125, -160, 300), (125, 105, 0), (0, 0, 1)], zoom=1.05)
+    shoot(pl, str(out / "print_layout.jpg"), [(125, -160, 300), (125, 105, 0), (0, 0, 1)], zoom=1.05)
 
     sections(b, plate_part, p, c, out / "sections.png")
 
@@ -133,7 +133,7 @@ def sections(b, plate_part, p: Phone, c: Case, path: pathlib.Path) -> None:
 
 def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path, flow=None) -> None:
     """Toolpaths and predicted colours of the streamline layer, seen from the back.
-    flow = (xs, ys, v) adds a panel of the vorticity behind the toolpaths."""
+    flow = (xs, ys, v, dye) adds the flow figure (vorticity, dye) and the four-step pipeline strip."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -159,51 +159,24 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
 
     plate_shape = outline_shp(p, 0.0)
     H = 9.0
+    aspect = (p.W + 6) / (p.L + 6)
     lw = (lyr.d_sep + 0.05) * H * 72 / (p.L + 6)  # printed width in points
+
+    def limits(ax):
+        ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3)
+        ax.set_aspect(1); ax.axis("off")
 
     def frame(ax, base):
         ax.add_patch(patch(plate_shape, facecolor="#9aa59a", edgecolor="none"))  # TPU rim (Hazel-ish grey)
         ax.add_patch(patch(region, facecolor=base, edgecolor="none"))
-        ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3)
-        ax.set_aspect(1); ax.axis("off")
+        limits(ax)
 
-    # 1. toolpaths
-    fig, ax = plt.subplots(figsize=(H * (p.W + 6) / (p.L + 6), H))
-    frame(ax, "#f4f1ea")
-    ax.add_collection(LineCollection([flip(l) for l in lyr.lines], lw=lw * 0.35, color="#1c1d24"))
-    fig.subplots_adjust(0, 0, 1, 1)
-    fig.savefig(out / "streamline_toolpaths.png", dpi=200)
-    plt.close(fig)
+    def draw_toolpaths(ax, scale=1.0):
+        frame(ax, "#f4f1ea")
+        ax.add_collection(LineCollection([flip(l) for l in lyr.lines], lw=lw * 0.35 * scale, color="#1c1d24"))
 
-    # 1b. the flow: vorticity with the toolpaths over it, and the dye label as stripes
-    if flow is not None:
-        xs, ys, v, dye = flow
-        v = np.asarray(v, float)
-        dye = None if dye is None else np.asarray(dye, float)
-        if ys[0] > ys[-1]:
-            ys, v = ys[::-1], v[:, :, ::-1]
-            dye = None if dye is None else dye[:, ::-1]
-        w = np.gradient(v[1], xs, axis=0) - np.gradient(v[0], ys, axis=1)
-        lim = np.percentile(np.abs(w), 99.5)
-        n = 1 if dye is None else 2
-        fig, axes = plt.subplots(1, n, figsize=(n * H * (p.W + 6) / (p.L + 6), H))
-        axes = np.atleast_1d(axes)
-        ext = (-xs[-1], -xs[0], ys[0], ys[-1])
-        axes[0].imshow(w[::-1].T, origin="lower", extent=ext, cmap="RdBu_r", vmin=-lim, vmax=lim, interpolation="bilinear")
-        axes[0].add_collection(LineCollection([flip(l) for l in lyr.lines], lw=0.25, color="#202020", alpha=0.6))
-        if dye is not None:  # 3 mm stripes of the smoothed inlet label: the streaklines the toolpaths follow
-            axes[1].imshow(np.sin(2 * np.pi * dye / 3.0)[::-1].T, origin="lower", extent=ext, cmap="gray",
-                           interpolation="antialiased")
-        for ax in axes:
-            ax.add_patch(patch(plate_shape.difference(region), facecolor="#d8d8d8", edgecolor="none", alpha=0.85))
-            ax.set_xlim(-p.W / 2 - 3, p.W / 2 + 3); ax.set_ylim(-p.L / 2 - 3, p.L / 2 + 3); ax.set_aspect(1); ax.axis("off")
-        fig.subplots_adjust(0, 0, 1, 1, wspace=0.02)
-        fig.savefig(out / "streamline_flow.png", dpi=200)
-        plt.close(fig)
-
-    # 2. predicted colours, one panel per palette
-    fig, axes = plt.subplots(1, len(PALETTES), figsize=(len(PALETTES) * H * (p.W + 6) / (p.L + 6) + 0.6, H + 0.5))
-    for ax, (key, (title, base, seq)) in zip(np.atleast_1d(axes), PALETTES.items()):
+    def draw_colors(ax, key, scale=1.0):
+        title, base, seq = PALETTES[key]
         pieces = [(seq[k % len(seq)][1], mm) for k, (_, _, mm) in enumerate(bands)]
         cols = mix(lyr, pieces)
         frame(ax, base)
@@ -212,11 +185,78 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
             fl = flip(l)
             w = lyr.widths(k)
             segs += list(np.stack([fl[:-1], fl[1:]], 1)); rgb += list(0.5 * (cl[:-1] + cl[1:]))
-            lws += list(0.5 * (w[1:] + w[:-1]) * lw / lyr.d_sep)  # printed width
+            lws += list(0.5 * (w[1:] + w[:-1]) * lw * scale / lyr.d_sep)  # printed width
         ax.add_collection(LineCollection(segs, linewidths=lws, colors=rgb, capstyle="round", antialiaseds=False))
-        ax.set_title(title, fontsize=9)
+        return title
+
+    # 1. toolpaths
+    fig, ax = plt.subplots(figsize=(H * aspect, H))
+    draw_toolpaths(ax)
+    fig.subplots_adjust(0, 0, 1, 1)
+    fig.savefig(out / "streamline_toolpaths.png", dpi=200)
+    plt.close(fig)
+
+    # 2. predicted colours, one panel per palette
+    fig, axes = plt.subplots(1, len(PALETTES), figsize=(len(PALETTES) * H * aspect + 0.6, H + 0.5))
+    for ax, key in zip(np.atleast_1d(axes), PALETTES):
+        ax.set_title(draw_colors(ax, key), fontsize=9)
     fig.subplots_adjust(0.01, 0.0, 0.99, 0.96, wspace=0.04)
     fig.savefig(out / "streamline_colors.png", dpi=170)
+    plt.close(fig)
+
+    if flow is None:
+        return
+    xs, ys, v, dye = flow
+    v = np.asarray(v, float)
+    dye = None if dye is None else np.asarray(dye, float)
+    if ys[0] > ys[-1]:
+        ys, v = ys[::-1], v[:, :, ::-1]
+        dye = None if dye is None else dye[:, ::-1]
+    w = np.gradient(v[1], xs, axis=0) - np.gradient(v[0], ys, axis=1)
+    lim = np.percentile(np.abs(w), 99.5)
+    ext = (-xs[-1], -xs[0], ys[0], ys[-1])
+
+    def outside(ax):  # grey over the parts of the flow that are not printed
+        ax.add_patch(patch(plate_shape.difference(region), facecolor="#d8d8d8", edgecolor="none", alpha=0.85))
+        limits(ax)
+
+    def draw_vorticity(ax, paths=True):
+        ax.imshow(w[::-1].T, origin="lower", extent=ext, cmap="RdBu_r", vmin=-lim, vmax=lim, interpolation="bilinear")
+        if paths:
+            ax.add_collection(LineCollection([flip(l) for l in lyr.lines], lw=0.25, color="#202020", alpha=0.6))
+        outside(ax)
+
+    def draw_dye(ax):  # 3 mm stripes of the smoothed inlet label: the streaklines the toolpaths follow
+        ax.imshow(np.sin(2 * np.pi * dye / 3.0)[::-1].T, origin="lower", extent=ext, cmap="gray",
+                  interpolation="antialiased")
+        outside(ax)
+
+    # 3. the flow: vorticity with the toolpaths over it, and the dye label as stripes
+    n = 1 if dye is None else 2
+    fig, axes = plt.subplots(1, n, figsize=(n * H * aspect, H))
+    axes = np.atleast_1d(axes)
+    draw_vorticity(axes[0])
+    if dye is not None:
+        draw_dye(axes[1])
+    fig.subplots_adjust(0, 0, 1, 1, wspace=0.02)
+    fig.savefig(out / "streamline_flow.png", dpi=200)
+    plt.close(fig)
+
+    # 4. the pipeline in one strip: flow -> dye -> toolpaths -> colour
+    if dye is None:
+        return
+    h = 6.0
+    fig, axes = plt.subplots(1, 4, figsize=(4 * h * aspect + 0.6, h + 0.55))
+    draw_vorticity(axes[0], paths=False)
+    draw_dye(axes[1])
+    draw_toolpaths(axes[2], scale=h / H)
+    draw_colors(axes[3], "petg", scale=h / H)
+    titles = ["1. Simulate the wake\n(vorticity)", "2. Follow the dye\n(streaklines)",
+              "3. Contour it into toolpaths\n(dithered)", "4. Feed colour by hand\n(PETG pieces)"]
+    for ax, t in zip(axes, titles):
+        ax.set_title(t, fontsize=11)
+    fig.subplots_adjust(0.005, 0.0, 0.995, 0.9, wspace=0.05)
+    fig.savefig(out / "streamline_pipeline.png", dpi=150)
     plt.close(fig)
 
 
@@ -271,14 +311,14 @@ def streamline_renders(lyr, bands, b, plate_part, p: Phone, c: Case, out: pathli
 
     back = [(-150, -60, -300), (0, -4, -2), UP]
     for key in PALETTES:
-        shoot(scene(key), str(out / f"stream_back_{key}.png"), back, zoom=1.0)
-    shoot(scene("petg"), str(out / "stream_plan_petg.png"), [(0, 0, -400), (0, 0, -2), UP], zoom=1.0, parallel=True)
+        shoot(scene(key), str(out / f"stream_back_{key}.jpg"), back, zoom=1.0)
+    shoot(scene("petg"), str(out / "stream_plan_petg.jpg"), [(0, 0, -400), (0, 0, -2), UP], zoom=1.0, parallel=True)
     # close-ups: the flow parting around the collar, and the wake in raking light
-    shoot(scene("petg", raking=True), str(out / "stream_collar_closeup.png"),
+    shoot(scene("petg", raking=True), str(out / "stream_collar_closeup.jpg"),
           [(-110, -10, -210), (0, 45, -2), UP], zoom=1.0, fit=False)
-    shoot(scene("pla_gold", raking=True), str(out / "stream_wake_closeup.png"),
+    shoot(scene("petg", raking=True), str(out / "stream_wake_closeup.jpg"),
           [(-88, -133, -109), (5, -40, -2), UP], zoom=1.0, fit=False)
-    shoot(scene("petg", raking=True), str(out / "stream_bead_detail.png"),
+    shoot(scene("petg", raking=True), str(out / "stream_bead_detail.jpg"),
           [(-75, -95, -70), (5, -35, -2), UP], zoom=1.0, fit=False)
 
 

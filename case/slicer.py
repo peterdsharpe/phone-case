@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import configparser
 import functools
+import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -25,18 +27,40 @@ DROP_KEYS = {"inherits", "compatible_printers", "compatible_printers_condition",
              "default_sla_material_profile", "printer_vendor"}
 
 
+def _exe() -> str | None:
+    return next(filter(None, map(shutil.which, ("prusa-slicer", "PrusaSlicer", "prusa-slicer-console"))), None)
+
+
 def prusaslicer_cmd() -> list[str]:
-    exe = shutil.which("prusa-slicer") or shutil.which("PrusaSlicer")
+    """The PrusaSlicer command line: $PRUSASLICER, else PrusaSlicer on the PATH, else the Flatpak."""
+    if os.environ.get("PRUSASLICER"):
+        return shlex.split(os.environ["PRUSASLICER"])
+    exe = _exe()
     return [exe] if exe else ["flatpak", "run", FLATPAK_ID]
 
 
 @functools.cache
 def vendor_ini() -> pathlib.Path:
-    out = subprocess.run(["flatpak", "info", "--user", "-l", FLATPAK_ID], capture_output=True, text=True)
-    p = pathlib.Path(out.stdout.strip()) / "files/share/PrusaSlicer/profiles/PrusaResearch.ini"
-    if not p.exists():
-        raise FileNotFoundError("PrusaSlicer vendor profiles not found; is the flatpak installed?")
-    return p
+    """Prusa's vendor bundle, PrusaResearch.ini: $PRUSASLICER_PROFILES, else the usual install places."""
+    env = os.environ.get("PRUSASLICER_PROFILES")
+    dirs = [pathlib.Path(env)] if env else []
+    if shutil.which("flatpak"):
+        for scope in ("--user", "--system"):
+            out = subprocess.run(["flatpak", "info", scope, "-l", FLATPAK_ID], capture_output=True, text=True)
+            if out.returncode == 0:
+                dirs.append(pathlib.Path(out.stdout.strip()) / "files/share/PrusaSlicer/profiles")
+    if exe := _exe():  # distro packages and unpacked releases keep the profiles next to bin/
+        prefix = pathlib.Path(exe).resolve().parents[1]
+        dirs += [prefix / "share/PrusaSlicer/profiles", prefix / "resources/profiles", pathlib.Path(exe).resolve().parent / "resources/profiles"]
+    dirs += [pathlib.Path("/usr/share/PrusaSlicer/profiles"),
+             pathlib.Path("/Applications/PrusaSlicer.app/Contents/Resources/profiles"),
+             pathlib.Path("C:/Program Files/Prusa3D/PrusaSlicer/resources/profiles")]
+    for d in dirs:
+        f = d if d.suffix == ".ini" else d / "PrusaResearch.ini"
+        if f.exists():
+            return f
+    raise FileNotFoundError("PrusaSlicer's vendor profiles (PrusaResearch.ini) were not found. Set PRUSASLICER_PROFILES "
+                            "to that file (it ships in PrusaSlicer's resources/profiles folder), or build with --no-slice.")
 
 
 @functools.cache

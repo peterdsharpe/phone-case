@@ -11,8 +11,6 @@ so map east = phone -x.
 
 from __future__ import annotations
 
-import io
-import json
 import math
 import pathlib
 import subprocess

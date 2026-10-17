@@ -56,7 +56,6 @@ def bumper(p: Phone = PHONE, c: Case = CASE) -> bd.Part:
 
 def side_openings(p: Phone, c: Case) -> list[bd.Part]:
     """Openings for buttons, USB-C, speaker and microphones."""
-    Wo, Lo = c.outer_W(p), c.outer_L(p)
     zc = p.T / 2
     cuts = []
     depth_in = c.fit + 0.6  # start inside the cavity

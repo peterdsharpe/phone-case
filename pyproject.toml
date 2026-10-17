@@ -1,7 +1,10 @@
 [project]
 name = "phone-case"
 version = "0.1.0"
-description = "Parametric, 3D-printable case for the Google Pixel 9 Pro XL"
+description = "Parametric, 3D-printable Pixel 9 Pro XL case with a back plate printed along a simulated turbulent wake"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Peter Sharpe" }]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "build123d>=0.9",
@@ -20,6 +23,9 @@ dependencies = [
 gpu = [
     "numba-cuda[cu12]>=0.30.4",
 ]
+
+[project.urls]
+Repository = "https://github.com/peterdsharpe/phone-case"
 
 [tool.uv]
 package = false

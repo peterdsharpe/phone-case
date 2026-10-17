@@ -58,5 +58,9 @@ def shoot(pl, path: str, camera_position, zoom: float = 1.0, parallel: bool = Fa
     if fit:
         pl.reset_camera()
     pl.camera.zoom(zoom)
-    pl.screenshot(path)
+    img = pl.screenshot(None, return_img=True)
     pl.close()
+    from PIL import Image
+
+    # JPEG for the renders (a fifth of the size of PNG); full chroma keeps thin coloured beads crisp
+    Image.fromarray(img).save(path, **(dict(quality=90, subsampling=0) if path.endswith(".jpg") else {}))

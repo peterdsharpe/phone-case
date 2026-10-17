@@ -12,5 +12,6 @@
   `.scratch/tools/spectra.py` is the fuller interactive check (2-D spectrum, residual map).
 - **Look at renders critically** for numerical artifacts before presenting them, and explain
   any pattern that is not physics.
-- **GPU:** Peter allows the local GPU for the LBM solve (2026-10-15). Runs use under 1.5 GB of
-  VRAM and take minutes; check free memory with `nvidia-smi` before larger grids.
+- **GPU:** the LBM runs on a CUDA GPU through numba-cuda when one is available
+  (`uv sync --extra gpu`), and on the CPU otherwise. A default run needs under 1.5 GB of GPU
+  memory; check free memory with `nvidia-smi` before larger grids.
