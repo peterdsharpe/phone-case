@@ -41,13 +41,16 @@ def side_plane(origin, outward, along) -> bd.Plane:
     return bd.Plane(origin=origin, x_dir=along, z_dir=outward)
 
 
-def flared_cut(plane: bd.Plane, length: float, height: float, depth_in: float, depth_out: float, flare: float) -> bd.Part:
+def flared_cut(plane: bd.Plane, length: float, height: float, depth_in: float, depth_out: float, flare: float,
+               shape=None) -> bd.Part:
     """Cutter for a side opening: straight from -depth_in to 0 (local z), then flaring
     by `flare` per side out to +depth_out. Openings widen toward the outside so a
-    fingertip or cable plug can reach in."""
-    straight = plane.offset(-depth_in) * stadium(length, height)
-    start = plane * stadium(length, height)
-    end = plane.offset(depth_out) * stadium(length + 2 * flare, height + 2 * flare)
+    fingertip or cable plug can reach in. `shape(length, height)` gives the outline
+    (a stadium by default)."""
+    shape = shape or stadium
+    straight = plane.offset(-depth_in) * shape(length, height)
+    start = plane * shape(length, height)
+    end = plane.offset(depth_out) * shape(length + 2 * flare, height + 2 * flare)
     inner = bd.extrude(straight, depth_in, dir=plane.z_dir)
     outer = bd.loft([start, end], ruled=True)
     return inner + outer

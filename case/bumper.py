@@ -28,7 +28,11 @@ def bumper(p: Phone = PHONE, c: Case = CASE) -> bd.Part:
     cav = bd.fillet(cav.edges().group_by(bd.Axis.Z)[-1], p.edge_r + f)
     # Corner air pockets: a tighter corner radius in the middle of the wall leaves
     # a ~1.3 mm gap at each phone corner, so a corner hit squashes TPU before glass.
+    # The pocket's back end (its ceiling as printed, lip down) is a 45-degree roof.
+    # (Along the straight sides the pocket coincides with the cavity, so the chamfer only
+    # changes the corners.)
     relief = prism(outline(p, -f, corner_r=c.corner_relief_r + f), c.corner_relief_margin, p.T - c.corner_relief_margin)
+    relief = bd.chamfer(relief.edges().group_by(bd.Axis.Z)[0], c.relief_roof)
 
     # Front lip opening: straight throat, then bevels (45 deg on the long sides).
     h_in = c.lip_side_inner_h
@@ -47,7 +51,7 @@ def bumper(p: Phone = PHONE, c: Case = CASE) -> bd.Part:
     window = prism(window_sk, zb - 1.0, -c.plate_t)
 
     cutters = [cav, relief, throat, bevel, pocket, window, *side_openings(p, c)]
-    if c.grip:
+    if c.grip and c.grip_style == "flutes":  # the "billows" texture is cut into the print mesh (texture.py)
         cutters.append(grip_flutes(p, c))
     for cut in cutters:
         body = body - cut
@@ -61,16 +65,28 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
     depth_in = c.fit + 0.6  # start inside the cavity
     depth_out = c.wall + 0.4
 
-    # Right side (+x): power, then volume split in two by a post.
+    # Right side (+x): power, then volume. With btn_notch the openings run out through the
+    # back edge (open notches): printed lip-down, a closed window's back edge is a long bridge.
     def right(y0: float, y1: float, h: float):
-        pl = side_plane((p.W / 2 + c.fit + 0.2, (y0 + y1) / 2, zc), (1, 0, 0), (0, 1, 0))
+        x = p.W / 2 + c.fit + 0.2
+        if c.btn_notch:
+            z_hi, z_lo = zc + h / 2, c.z_back - 1.0
+            pl = side_plane((x, (y0 + y1) / 2, (z_hi + z_lo) / 2), (1, 0, 0), (0, 1, 0))
+            shape = lambda w, hh: rr(w, hh, c.notch_r)  # noqa: E731 - rounded corners at the notch's front end
+            reach = c.fit + 0.2 + c.flange_reach + 0.4  # past the rim's inner edge, or a strip of rim bridges the notch
+            cuts.append(flared_cut(pl, y1 - y0, z_hi - z_lo, reach, depth_out - 0.2, c.cut_flare, shape))
+            return
+        pl = side_plane((x, (y0 + y1) / 2, zc), (1, 0, 0), (0, 1, 0))
         cuts.append(flared_cut(pl, y1 - y0, h, depth_in + 0.2, depth_out - 0.2, c.cut_flare))
 
     m = c.btn_margin
-    right(p.from_top(p.power_top + p.power_len) - m, p.from_top(p.power_top) + m, c.btn_cut_h)
     v_hi = p.from_top(p.vol_top) + m
     v_lo = p.from_top(p.vol_top + p.vol_len) - m
     v_mid = (v_hi + v_lo) / 2
+    if c.btn_notch:  # one notch for both buttons: separate notches would leave a loose tooth between them
+        right(v_lo, p.from_top(p.power_top) + m, c.btn_cut_h)
+        return _bottom_and_top(p, c, cuts, zc, depth_in, depth_out)
+    right(p.from_top(p.power_top + p.power_len) - m, p.from_top(p.power_top) + m, c.btn_cut_h)
     if c.vol_post > 0:
         right(v_mid + c.vol_post / 2, v_hi, c.btn_cut_h)
         right(v_lo, v_mid - c.vol_post / 2, c.btn_cut_h)
@@ -80,7 +96,10 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
         cuts.append(bd.Pos(p.W / 2 + depth / 2 - 0.25, (y0 + y1) / 2, zc) * bd.Box(depth + 0.5, y1 - y0, p.btn_h + 1.0))
     else:
         right(v_lo, v_hi, c.btn_cut_h)
+    return _bottom_and_top(p, c, cuts, zc, depth_in, depth_out)
 
+
+def _bottom_and_top(p: Phone, c: Case, cuts: list, zc: float, depth_in: float, depth_out: float) -> list[bd.Part]:
     # Bottom (-y): speaker, USB-C, microphone.
     def bottom(x: float, length: float, h: float):
         pl = side_plane((x, -(p.L / 2 + c.fit + 0.2), zc), (0, -1, 0), (1, 0, 0))

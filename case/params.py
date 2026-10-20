@@ -65,6 +65,7 @@ class Case:
 
     # --- fit -------------------------------------------------------------------
     fit: float = 0.10  # side clearance, phone to bumper. TPU refs use 0 to 0.2
+    fit_rigid: float = 0.20  # side clearance for the PETG bumper (0.10 went on very tight)
     fit_z: float = 0.0  # thickness clearance, plate + phone inside the bumper (TPU stretches)
 
     # --- bumper walls and corners ---------------------------------------------
@@ -72,6 +73,7 @@ class Case:
     outer_corner_r: float = 8.0  # smaller than the phone's 12 mm -> thicker corners
     corner_relief_r: float = 9.0  # inner corner pocket -> ~1.3 mm air gap at each corner
     corner_relief_margin: float = 1.0  # pocket stops this far from the front/back faces
+    relief_roof: float = 1.3  # 45-degree roof at the pocket's back end (its ceiling when printed lip-down)
     front_chamfer: float = 0.5  # outer edge on the bed when printing
     back_fillet: float = 0.8
 
@@ -100,7 +102,9 @@ class Case:
     # --- cut-outs -----------------------------------------------------------------
     btn_margin: float = 1.5  # opening extends past each end of a button
     btn_cut_h: float = 5.5  # opening size across the thickness
-    vol_post: float = 2.5  # bar splitting the volume opening (shorter TPU bridges)
+    vol_post: float = 2.5  # bar splitting a closed volume window (shorter bridges); unused with btn_notch
+    btn_notch: bool = True  # button openings run out through the back edge: no bridged overhang
+    notch_r: float = 1.5  # corner radius at the notch's front end (no sharp corner to start a crack)
     cut_flare: float = 0.6  # openings widen by this much at the outer surface
     usb_cut_w: float = 13.4
     usb_cut_h: float = 6.4
@@ -109,9 +113,18 @@ class Case:
     mic_cut_w: float = 3.6
     mic_cut_h: float = 2.4
 
-    # --- grip flutes on the long sides ---------------------------------------------
+    # --- grip texture on the long sides ---------------------------------------------
     grip: bool = True
-    grip_depth: float = 0.3
+    grip_style: str = "billows"  # "billows": Kelvin-Helmholtz curls (texture.py); "flutes": straight grooves
+    grip_y: tuple[float, float] = (-69.0, 69.0)  # billows: extent along both sides (openings skipped)
+    grip_clear: float = 1.5  # billows: clearance to the button openings
+    grip_groove_w: float = 1.0  # billows: groove width (a 0.6 mm nozzle resolves about 0.8 mm)
+    grip_taper: float = 2.0  # billows: grooves fade out over this length at each end
+    billow_lambda: float = 16.0  # billow spacing along the side
+    billow_C: float = 1.6  # Stuart vortex concentration (1: plain shear layer; larger: tighter vortices)
+    billow_T: float = 3.0  # roll-up time: how far the dye lines have wound
+    billow_spacing: float = 1.5  # dye-line spacing across the shear layer (units of lambda / 2 pi)
+    grip_depth: float = 0.35
     grip_r: float = 0.55  # flute radius (width ~1 mm at 0.3 mm depth)
     grip_pitch: float = 2.4
     grip_left_y: tuple[float, float] = (-62.0, 34.0)

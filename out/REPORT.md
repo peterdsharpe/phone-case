@@ -1,16 +1,17 @@
 # Build report
 
-Built by `python -m case.build` in 27 s.
+Built by `python -m case.build` in 74 s.
 
 | part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | colour changes |
 |---|---|---|---|---|---|---|
-| bumper | TPU | 11.3 | 79.6 x 165.8 x 11.8 | 1h 29m 32s | 13.16 | 0 |
+| bumper_tpu | TPU | 10.7 | 79.6 x 165.8 x 11.7 | 1h 40m 4s | 10.74 | 0 |
+| bumper_petg | PETG | 11.5 | 79.8 x 166.0 x 11.7 | 1h 33m 51s | 11.73 | 0 |
 | plate | PETG | 17.8 | 76.1 x 162.3 x 4.6 | 44m 47s + ~16 min | 21.01 | 2 |
 | plate (PLA option) | PLA | 17.3 | 76.1 x 162.3 x 4.6 | 43m 4s + ~16 min | 20.51 | 2 |
-| test_fit_band | TPU | 5.6 | 79.6 x 165.8 x 5.9 | 45m 0s | 6.70 | 0 |
+| test_fit_band | TPU | 5.7 | 79.6 x 165.8 x 5.9 | 51m 54s | 5.73 | 0 |
 | test_camera | PETG | 3.8 | 76.1 x 44.5 x 4.6 | 18m 10s | 3.96 | 0 |
 
-Overlap check (mm^3, should be 0): bumper/phone 0.000, plate/phone 0.000, bumper/plate 0.000
+Overlap check (mm^3, should be 0): bumper/phone 0.000, PETG bumper/phone 0.000, plate/phone 0.000, bumper/plate 0.000
 
 ## Streamline layer
 

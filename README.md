@@ -1,8 +1,8 @@
 # A phone case printed along a turbulent wake
 
 A parametric, drop-first case for the Google Pixel 9 Pro XL, in two printed
-parts: a TPU bumper that takes the hits, and a PETG back plate. The plate's
-visible face is one layer of custom toolpaths. They trace dye through a
+parts: a bumper that takes the hits (TPU, or PETG for a stiffer shell), and a
+PETG back plate. The plate's visible face is one layer of custom toolpaths. They trace dye through a
 simulated turbulent wake: the wake of air flowing past the phone's own camera
 bar. Short pieces of filament, fed into the printer one after another, become
 streams of dye.
@@ -22,10 +22,11 @@ by the flow (2), contours of that label as toolpaths (3), and the colors of the
 filament pieces as they will blend in the hotend (4).
 
 > [!NOTE]
-> **Status:** designed, simulated, sliced and checked in software, but not yet
-> printed: the phone is still on its way. Its dimensions come from Google's
-> published size and from published cases. [MEASURE.md](MEASURE.md) lists
-> what to check with calipers, and two short test prints check the fit.
+> **Status:** the phone has arrived and the first bumpers are printed, in TPU
+> and in PETG. This version fixes what they showed (see [the first
+> prints](#the-first-prints)); it and the back plate are not printed yet. The
+> phone's dimensions come from Google's published size and from published cases.
+> [MEASURE.md](MEASURE.md) lists what to check with calipers.
 
 Everything is Python and rebuilds with one command:
 
@@ -60,7 +61,7 @@ Everything is Python and rebuilds with one command:
   </tr>
   <tr>
     <td>The front: a 1.4 mm lip all round, beveled low on the long sides for edge gestures.</td>
-    <td>Thick corners, where drops land, with an air pocket behind the TPU.</td>
+    <td>Thick corners, where drops land, with an air pocket behind the wall. One open notch leaves both buttons free.</td>
   </tr>
   <tr>
     <td><img src="out/renders/camera_closeup.jpg" alt="Camera collar"></td>
@@ -101,13 +102,15 @@ it there. Either part can be reprinted on its own.
 
 | Feature | Value | Why |
 |---|---|---|
-| Side wall | 1.4 mm TPU | two 0.7 mm perimeters from a 0.6 mm nozzle |
+| Side wall | 1.4 mm TPU or PETG | two 0.7 mm perimeters from a 0.6 mm nozzle |
 | Corners | 2.4 mm TPU plus a 1.3 mm air pocket | a corner hit compresses TPU into the pocket before it reaches the glass |
 | Front lip | 1.4 mm above the screen | face-down falls and slides land on the lip, not the glass |
 | Long-side lips | 45° bevel, 0.5 mm high at the inner edge | room for edge-swipe gestures |
 | Rear rim | 0.6 mm proud of the plate | protects the plate edge and the glass corners |
 | Camera collar | 1.0 mm above the camera bar | the phone can lie on its back; the inner top edge is beveled against flash glare |
-| Fit | 0.10 mm side clearance, none in thickness | snug, because TPU loosens a little with use |
+| Buttons | one notch over power and volume, open at the back | a closed window's back edge prints as a long, saggy bridge |
+| Grip | Kelvin–Helmholtz billows, 0.35 mm deep, on both long sides | something to hold, and the same physics as the back |
+| Fit | 0.10 mm side clearance in TPU, 0.20 mm in PETG; none in thickness | TPU loosens a little with use; a rigid shell needs room to go on |
 
 ### The back, take 1: a topographic map
 
@@ -300,6 +303,36 @@ checker reads the result back:
   </tr>
 </table>
 
+### The first prints
+
+The first bumpers came off the printer once the phone arrived. In TPU the finish
+was rough, mostly from damp filament. A PETG print of the same file went on, but
+very tight. Both showed where the design fought the printer:
+
+- **Bridges.** Printed lip-down, the back edge of each side window was a long
+  bridge, and it sagged in both materials. One notch over both buttons, open at
+  the back, has no bridge at all, and it lets a PETG shell flex as it goes on.
+- **Hidden ceilings.** The corner air pockets ended in flat ceilings inside the
+  wall, which printed as loose strands to trim with a knife. They now end in
+  45° roofs, which print like any other wall.
+- **Fit.** A rigid PETG shell gets 0.1 mm more room on each side than TPU.
+- **Grip.** The straight grip flutes became Kelvin–Helmholtz billows. A shear
+  layer rolls up into a row of vortices (Stuart's exact solution), and two dye
+  lines carried by that flow wind into breaking-wave curls. The grooves follow
+  them: 1 mm wide, 0.35 mm deep, wide enough for a 0.6 mm nozzle to trace.
+  Unlike the old flutes, they also run above the buttons.
+- **Settings.** Both bumpers have tuned profiles: finer layers, cooler nozzles,
+  shorter retraction, travel kept inside the walls, and seams away from the
+  inside corners (see *Settings and tips* below).
+
+<p align="center">
+  <img src="docs/img/process/billows.jpg" width="100%" alt="The billow groove pattern, flat: a row of breaking-wave curls">
+</p>
+
+<p align="center">
+  <img src="out/renders/side_texture.jpg" width="70%" alt="The button side: billow grooves and the open notch over the buttons">
+</p>
+
 ## Print it
 
 Everything is in `out/print/`. The `.3mf` files are PrusaSlicer projects with
@@ -308,15 +341,18 @@ Original Prusa MK3S+ with a 0.6 mm nozzle.
 
 | File | Material | Time | Filament | Notes |
 |---|---|---|---|---|
-| `test_fit_band_tpu.3mf` | TPU | 45 min | 7 g | Print first: the front 6 mm of the bumper checks outline, corners, lip, buttons and ports |
-| `test_camera_petg.3mf` | PETG | 18 min | 4 g | The top of the plate: checks the camera collar |
-| `bumper_tpu.3mf` | TPU | 1 h 30 min | 13 g | |
+| `bumper_tpu.3mf` | TPU | 1 h 40 min | 11 g | The bumper in TPU: softer, and it stretches over the phone |
+| `bumper_petg.3mf` | PETG | 1 h 35 min | 12 g | The bumper in PETG: stiffer, 0.1 mm roomier on each side |
+| `test_fit_band_tpu.3mf` | TPU | 50 min | 6 g | Optional: the front 6 mm of the bumper, to check outline, corners, lip and openings |
+| `test_camera_petg.3mf` | PETG | 18 min | 4 g | Optional: the top of the plate, to check the camera collar |
 | `plate_streamlines_petg.gcode` | PETG | 1 h | 21 g | The plate with the streamline layer (G-code, not a project; see below) |
 | `plate_streamlines_pla.gcode` | PLA | 1 h | 21 g | The same in PLA for the brighter palette |
 | `plate_petg.3mf` | PETG | 45 min | 18 g | A plain flat plate, without the streamline layer |
 
-Plain STLs sit next to the projects, and the settings are also in
-`out/profiles/*.ini` (File > Import > Import Config).
+Plain STLs of the plate and the test pieces sit next to the projects. The
+bumpers' textured meshes travel inside their `.3mf` files, and the build also
+writes them as STL. The settings are also in `out/profiles/*.ini` (File >
+Import > Import Config).
 
 **The streamline layer**, with the filament sensor off:
 
@@ -338,16 +374,22 @@ G-code first, open it in PrusaSlicer's G-code viewer.
 <details>
 <summary><b>Settings and tips</b></summary>
 
-- **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile. Temperatures are
-  raised for a hardened-steel nozzle: TPU 245 °C, PETG 250 °C, PLA 225 °C.
-- **TPU** (`Generic FLEX` preset, flow capped at 2 mm³/s): dry it first (about
-  50 °C for 4–6 h). Loosen the extruder idler a little if it skips. If your TPU
+- **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile, with a 0.6 mm
+  hardened-steel nozzle.
+- **Bumpers**: 0.12 mm layers on a 0.15 mm first layer. That is finer than
+  Prusa's 0.15 mm floor for this nozzle (lifted in the projects); much thinner
+  than 0.1 mm, the wide nozzle face drags on the layer below. Outer walls print
+  at 25 mm/s. Seams sit at the top end, away from the inside corners, with
+  scarf joints where the contour is smooth. Travel stays inside the walls, so
+  no strings cross the cavity or the openings. Overhangs slow down and get more
+  fan the further they reach. Top and bottom lines are concentric. No ironing.
+- **TPU bumper** (based on Prusa's `Ultrafuse TPU-95A` preset): 235 °C, flow
+  capped at 1.8 mm³/s, 0.8 mm retraction at 25 mm/s and no z-hop, extrusion
+  multiplier 1.05. Dry the filament first (about 50 °C for 4–6 h). If your TPU
   is softer than 95A, lower `filament_max_volumetric_speed` to 1.2.
-- **TPU finish**: 0.15 mm layers smooth the 45° lip and the rim fillet for 2–3
-  min more (TPU prints at its flow limit, so thinner layers barely slow it).
-  Concentric top and bottom lines follow the outline, and scarf seams hide the
-  outer wall's seam where the contour is smooth. No ironing: TPU smears.
-- **PETG** (`Prusament PETG @0.6 nozzle` preset): the layer heights are
+- **PETG bumper** (`Prusament PETG @0.6 nozzle`): 240 °C, solid infill, 0.8 mm
+  retraction with wipe, 0.2 mm z-hop, and up to 90% fan on overhangs.
+- **PETG plate**: 250 °C for its faster 0.25 mm layers. The layer heights are
   layer-range modifiers in the project, so you can edit them in the GUI. No
   ironing: it would flatten the streamline beads.
 - **Sheet**: TPU and PETG both stick hard to smooth PEI. Use glue stick as a
@@ -358,11 +400,18 @@ G-code first, open it in PrusaSlicer's G-code viewer.
 
 </details>
 
+**Which face is the front.** Without the plate, the bumper looks much the same
+from both sides. The front is the face that printed on the bed: smooth, with a
+narrow lip. The back has the rim and the pill-shaped window around the camera
+bar. With the screen toward the front, the open notch sits over the buttons on
+the right.
+
 **Assembly.** Put the plate into the bumper from the front, collar first, so the
 collar pokes out through the rim at the back: bow the plate slightly and stretch
-the TPU over one end, then the other. Press the phone in the same way, bottom end
-first, then peel the lip over the top corners. To take it off, push the phone out
-through the front from the camera window.
+the bumper over one end, then the other (a PETG bumper flexes most on the notch
+side). Press the phone in the same way, bottom end first, then ease the lip over
+the top corners. To take it off, push the phone out through the front from the
+camera window.
 
 ## Build it
 
@@ -387,7 +436,11 @@ uv sync --extra gpu            # optional: an NVIDIA GPU, for new flow simulatio
 All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 `Case` for the case. Some useful ones:
 
-- `Case.fit`: side clearance. Raise it by 0.05 if the fit band is too tight.
+- `Case.fit`, `Case.fit_rigid`: side clearance for the TPU and the PETG bumper.
+  Raise one by 0.05 if that bumper is too tight.
+- `Case.btn_notch`: open button notch (default) or closed windows.
+  `Case.grip_style`: `"billows"` or the old `"flutes"`; `billow_lambda`,
+  `billow_C`, `billow_T` and `billow_spacing` shape the billows.
 - `Case.design`: `"streamlines"` (the default), `"karman"`, `"topo"`, or `"none"`.
 - `Case.stream_phase`, `stream_bands`, `dye_smooth`: which snapshot, how many
   color pieces, and how fine the dye structure is.
@@ -404,7 +457,8 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 | File | Contents |
 |---|---|
 | `case/params.py` | every dimension, with sources and ranges |
-| `case/phone.py`, `bumper.py`, `plate.py` | the phone model, the TPU bumper, the back plate and collar |
+| `case/phone.py`, `bumper.py`, `plate.py` | the phone model, the bumper, the back plate and collar |
+| `case/texture.py` | the billow grip texture, cut into the bumper's print mesh |
 | `case/lbm.py`, `lbm_gpu.py`, `streamflow.py` | lattice-Boltzmann flow and dye past the collar (CPU and GPU) |
 | `case/spectra.py` | the spectral health check |
 | `case/contourpaths.py` | dithered contours of the dye: the toolpaths |

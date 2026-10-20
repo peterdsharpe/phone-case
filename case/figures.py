@@ -68,6 +68,14 @@ def render_all(b, plate_part, p: Phone, c: Case, out: pathlib.Path) -> None:
     add(pl, mb, COLORS["tpu"], specular=0.3)
     shoot(pl, str(out / "corner_closeup.jpg"), [(190, 75, 170), (30, 52, 4), UP], zoom=0.55, fit=False)
 
+    # The button side in raking light: the grip texture and the open notch over the buttons.
+    pl = plotter()
+    pl.add_light(pv.Light(position=(0, 200, 30), focal_point=(39, 0, 3), intensity=0.7, light_type="scene light"))
+    _phone(pl, parts)
+    add(pl, mb, COLORS["tpu"], specular=0.35)
+    _plate(pl, mp, c, "galaxy")
+    shoot(pl, str(out / "side_texture.jpg"), [(175, -135, 75), (22, 2, 3), UP], zoom=1.0, fit=False)
+
     if relief:  # the plate alone, relief tinted by height (the print itself is one or two colours)
         _relief_tint(plotter(), mp, c, out)
     _exploded_and_layout(b, mb, mp, plate_part, parts, p, c, out)  # exploded view, bed layout, sections
@@ -113,7 +121,7 @@ def sections(b, plate_part, p: Phone, c: Case, path: pathlib.Path) -> None:
     zt = c.z_front(p) + 1
     zb = c.collar_top(p) - 1
     views = [
-        dict(name="Long side (y = -40): side lip bevel, grip flute, rim over plate bevel",
+        dict(name="Long side (y = -40): side lip bevel, grip texture, rim over plate bevel",
              origin=(0, -40, 0), normal=(0, 1, 0), u=(-1, 0, 0), xlim=(33, 41), ylim=(-3, zt)),
         dict(name="Corner (diagonal): 2.4 mm TPU + 1.3 mm air pocket",
              origin=(cx, cy, 0), normal=(d[1], -d[0], 0), u=tuple(d), xlim=(9, 17.5), ylim=(-3, zt)),
@@ -123,7 +131,7 @@ def sections(b, plate_part, p: Phone, c: Case, path: pathlib.Path) -> None:
              origin=(0, 0, 0), normal=(1, 0, 0), u=(0, -1, 0), xlim=(74, 84), ylim=(-3, zt)),
         dict(name="Right side at the power button",
              origin=(0, p.from_top(p.power_top + p.power_len / 2), 0), normal=(0, 1, 0), u=(1, 0, 0), xlim=(33, 41), ylim=(-3, zt)),
-        dict(name="Right side at the volume post (recessed off the rocker)",
+        dict(name="Right side at the volume rocker: open notch",
              origin=(0, p.from_top(p.vol_top + p.vol_len / 2), 0), normal=(0, 1, 0), u=(1, 0, 0), xlim=(33, 41), ylim=(-3, zt)),
     ]
     section_figure(M, views, str(path), "Cross-sections: phone (green), TPU bumper (dark), PETG plate (blue)")

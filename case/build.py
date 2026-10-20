@@ -7,12 +7,15 @@ out/renders (PNG), and out/REPORT.md (sizes, masses, print times).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import pathlib
+import tempfile
 import time
 
 import build123d as bd
 import numpy as np
 import shapely
+import trimesh
 
 from . import slicer, topo
 from .bumper import bumper
@@ -26,21 +29,48 @@ OUT = ROOT / "out"
 DENSITY = {"TPU": 1.21, "PETG": 1.27, "PLA": 1.24}  # g/cm^3
 
 # Print settings on top of Prusa's presets (MK3S+, 0.6 mm hardened-steel nozzle).
-TPU = dict(
-    print="0.20mm DETAIL @0.6 nozzle MK3", filament="Generic FLEX",
+# The bumpers are tuned for finish. 0.12 mm layers smooth the walls and 45-degree faces; Prusa's
+# profile stops at 0.15 for this nozzle (lifted below), and much thinner than 0.1 the wide nozzle
+# face drags on the layer below and the flow gets erratic.
+BUMPER = dict(
+    min_layer_height=0.07, layer_height=0.12, first_layer_height=0.15,
+    perimeters=2, perimeter_generator="arachne",
+    perimeter_extrusion_width=0.7, external_perimeter_extrusion_width=0.7,
+    top_solid_layers=6, bottom_solid_layers=6, top_fill_pattern="concentric", bottom_fill_pattern="concentric",
+    external_perimeter_speed=25, perimeter_speed=35, small_perimeter_speed=20, first_layer_speed=15,
+    # Overhangs (the bottom openings, the rim's bevel): slower and cooler the more a line overhangs.
+    enable_dynamic_overhang_speeds=1, overhang_speed_0=12, overhang_speed_1=15, overhang_speed_2=20, overhang_speed_3=25,
+    bridge_speed=20, thick_bridges=0,
+    # Seams at the top end, away from the inside corners; scarf joints ramp them in where the contour is smooth.
+    seam_position="rear", seam_gap="10%", staggered_inner_seams=1,
+    scarf_seam_placement="everywhere", scarf_seam_only_on_smooth=1, scarf_seam_length=15,
+    # Travel stays inside the ring, so no strings cross the cavity or the openings.
+    avoid_crossing_perimeters=1, travel_speed=180,
+    elefant_foot_compensation=0.15, skirts=1, skirt_distance=3, brim_width=0, support_material=0,
+)
+TPU = dict(  # a 95A TPU; Prusa's MK3-compatible Ultrafuse TPU-95A preset is the closest match
+    print="0.15mm DETAIL @0.6 nozzle MK3", filament="Ultrafuse TPU-95A",
     overrides=dict(
-        perimeters=2, perimeter_generator="arachne",
-        perimeter_extrusion_width=0.7, external_perimeter_extrusion_width=0.7,
-        fill_density="25%", fill_pattern="gyroid", top_solid_layers=4, bottom_solid_layers=4,
-        temperature=245, first_layer_temperature=245,  # +5 C for hardened steel
-        filament_max_volumetric_speed=2.0, avoid_crossing_perimeters=1, thick_bridges=1,
-        skirts=1, skirt_distance=3, brim_width=0, support_material=0,
-        # Looks: 0.15 mm layers smooth the 45-degree lip and the rim fillet for ~2 min more (TPU
-        # prints at its flow limit, so thinner layers barely slow it); concentric lines follow the
-        # outline on the lip and rim faces instead of crossing the corners diagonally; scarf seams
-        # ramp the outer wall's seam in where the contour is smooth.
-        layer_height=0.15, first_layer_height=0.2, top_fill_pattern="concentric", bottom_fill_pattern="concentric",
-        seam_position="aligned", scarf_seam_placement="contours", scarf_seam_only_on_smooth=1,
+        BUMPER, filament_settings_id="TPU 95A (phone-case bumper)",
+        fill_density="25%", fill_pattern="gyroid",
+        temperature=235, first_layer_temperature=235,  # 10 C below the first print: less stringing at this low flow
+        bed_temperature=50, first_layer_bed_temperature=50,
+        filament_max_volumetric_speed=1.8, extrusion_multiplier=1.05,  # Generic FLEX's 1.15 over-extrudes a 95A
+        filament_retract_length=0.8, filament_retract_speed=25, filament_deretract_speed=20,
+        filament_retract_lift=0, filament_retract_before_travel=2, filament_wipe=0,  # no z-hop: it strings
+        min_fan_speed=40, max_fan_speed=70, bridge_fan_speed=80, fan_always_on=1,
+    ),
+)
+PETG_BUMPER = dict(
+    print="0.15mm DETAIL @0.6 nozzle MK3", filament="Prusament PETG @0.6 nozzle",
+    overrides=dict(
+        BUMPER, filament_settings_id="Prusament PETG (phone-case bumper)",
+        fill_density="100%", fill_pattern="rectilinear",
+        temperature=240, first_layer_temperature=240,  # 10 C below the first print; inside Prusament's 250 +- 10
+        filament_max_volumetric_speed=10,
+        filament_retract_length=0.8, filament_retract_lift=0.2, filament_wipe=1,
+        bridge_fan_speed=80, enable_dynamic_fan_speeds=1,
+        overhang_fan_speed_0=90, overhang_fan_speed_1=70, overhang_fan_speed_2=50, overhang_fan_speed_3=35,
     ),
 )
 PETG = dict(
@@ -78,9 +108,25 @@ def relief(p: Phone, c: Case):
     raise ValueError(f"unknown design {c.design!r}")
 
 
-def to_print_bumper(part: bd.Part, p: Phone, c: Case) -> bd.Part:
-    """Lip on the bed: rotate 180 deg about y, front face to z = 0."""
+def to_print_bumper(part, p: Phone, c: Case):
+    """Lip on the bed: rotate 180 deg about y, front face to z = 0 (a build123d part or a trimesh)."""
+    if isinstance(part, trimesh.Trimesh):
+        m = part.copy()
+        m.apply_transform([[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, c.z_front(p)], [0, 0, 0, 1]])
+        return m
     return bd.Pos(0, 0, c.z_front(p)) * (bd.Rot(0, 180, 0) * part)
+
+
+def print_mesh(b: bd.Part, p: Phone, c: Case) -> trimesh.Trimesh:
+    """The bumper as printed: the CAD tessellated like the STL export, plus the grip texture."""
+    with tempfile.TemporaryDirectory() as d:
+        bd.export_stl(b, f"{d}/b.stl", tolerance=0.01, angular_tolerance=0.1)
+        m = trimesh.load(f"{d}/b.stl")
+    if c.grip and c.grip_style == "billows":
+        from . import texture
+
+        m = texture.apply(m, p, c)
+    return m
 
 
 def to_print_plate(part: bd.Part) -> bd.Part:
@@ -97,11 +143,21 @@ def box_north_of(y: float, big: float = 400) -> bd.Part:
 
 
 def stl(part, path: pathlib.Path):
-    bd.export_stl(part, str(path), tolerance=0.01, angular_tolerance=0.1)
+    if isinstance(part, trimesh.Trimesh):
+        part.export(str(path))
+    else:
+        bd.export_stl(part, str(path), tolerance=0.01, angular_tolerance=0.1)
 
 
 def mass_g(part, material: str) -> float:
     return part.volume / 1000 * DENSITY[material]
+
+
+def size(part) -> tuple[float, float, float]:
+    if isinstance(part, trimesh.Trimesh):
+        return tuple(part.extents)
+    bb = part.bounding_box()
+    return bb.size.X, bb.size.Y, bb.size.Z
 
 
 def make_project(stl_path: pathlib.Path, spec: dict, name: str, events=None, ranges=None) -> dict[str, str]:
@@ -203,12 +259,14 @@ def main(argv=None):
 
     # --- geometry -----------------------------------------------------------------
     levels, region = relief(p, c)
-    b = bumper(p, c)
+    c_rigid = dataclasses.replace(c, fit=c.fit_rigid)  # the PETG bumper: rigid, so a little more clearance
+    b, b_rigid = bumper(p, c), bumper(p, c_rigid)
     pl = plate(p, c, relief=levels)
     ph = phone_solid(p)
-    for nm, part in (("bumper", b), ("plate", pl)):
+    for nm, part in (("bumper", b), ("bumper (PETG)", b_rigid), ("plate", pl)):
         assert part.is_valid and len(part.solids()) == 1, f"{nm}: invalid or split into pieces"
-    clash = {"bumper/phone": (b & ph).volume, "plate/phone": (pl & ph).volume, "bumper/plate": (b & pl).volume}
+    clash = {"bumper/phone": (b & ph).volume, "PETG bumper/phone": (b_rigid & ph).volume,
+             "plate/phone": (pl & ph).volume, "bumper/plate": (b & pl).volume}
     note(f"geometry built in {time.time() - t0:.0f} s; overlaps (mm^3): " + ", ".join(f"{k} {v:.3f}" for k, v in clash.items()))
     if levels:
         topo.save_preview([g for g, _ in levels], region, str(OUT / "renders" / "relief_map.png"))
@@ -217,28 +275,33 @@ def main(argv=None):
     band = b & box_above(4.0)
     cam_test = pl & box_north_of(p.cam_y - p.cam_h / 2 - 9.0)
 
+    # The bumpers as printed: the CAD plus the grip texture, which only the print mesh carries.
+    m_tpu, m_petg = print_mesh(b, p, c), print_mesh(b_rigid, p, c_rigid)
+    note(f"textured bumpers at {time.time() - t0:.0f} s ({len(m_tpu.faces)} triangles)")
+
     # --- exports ------------------------------------------------------------------
-    parts = {
-        "bumper": (to_print_bumper(b, p, c), "TPU", TPU),
-        "plate": (to_print_plate(pl), "PETG", PETG),
-        "test_fit_band": (to_print_bumper(band, p, c), "TPU", TPU),
-        "test_camera": (to_print_plate(cam_test), "PETG", PETG),
+    parts = {  # STL name: (part as printed, material, print settings, project name)
+        "bumper_tpu": (to_print_bumper(m_tpu, p, c), "TPU", TPU, "bumper_tpu"),
+        "bumper_petg": (to_print_bumper(m_petg, p, c_rigid), "PETG", PETG_BUMPER, "bumper_petg"),
+        "plate": (to_print_plate(pl), "PETG", PETG, "plate_petg"),
+        "test_fit_band": (to_print_bumper(band, p, c), "TPU", TPU, "test_fit_band_tpu"),
+        "test_camera": (to_print_plate(cam_test), "PETG", PETG, "test_camera_petg"),
     }
-    for nm, (part, mat, _) in parts.items():
+    for nm, (part, *_) in parts.items():
         stl(part, OUT / "print" / f"{nm}.stl")
     b.label, pl.label = "bumper (TPU)", "back plate (PETG)"
     phone_ref = phone_solid(p)
     phone_ref.label = "Pixel 9 Pro XL (reference)"
     bd.export_step(bd.Compound([b, pl, phone_ref]), str(OUT / "cad" / "case_assembly.step"))
-    bd.export_step(b, str(OUT / "cad" / "bumper.step"))
+    bd.export_step(b, str(OUT / "cad" / "bumper.step"))  # without the grip texture (print mesh only)
+    bd.export_step(b_rigid, str(OUT / "cad" / "bumper_petg.step"))
     bd.export_step(pl, str(OUT / "cad" / "plate.step"))
     note(f"exported STL/STEP at {time.time() - t0:.0f} s")
 
     rows = []
-    for nm, (part, mat, spec) in parts.items():
-        bb = part.bounding_box()
-        base = dict(part=nm, material=mat, model_g=f"{mass_g(part, mat):.1f}",
-                    size=f"{bb.size.X:.1f} x {bb.size.Y:.1f} x {bb.size.Z:.1f}")
+    for nm, (part, mat, spec, project) in parts.items():
+        sx, sy, sz = size(part)
+        base = dict(part=nm, material=mat, model_g=f"{mass_g(part, mat):.1f}", size=f"{sx:.1f} x {sy:.1f} x {sz:.1f}")
         if args.no_slice:
             rows.append(base)
             continue
@@ -251,7 +314,7 @@ def main(argv=None):
             pla_stats, *_ = streamline_plate(p, c, region, PLA, note, tag="pla")
             rows.append(base | dict(part="plate (PLA option)", material="PLA", model_g=f"{mass_g(part, 'PLA'):.1f}") | pla_stats)
             continue
-        rows.append(base | make_project(OUT / "print" / f"{nm}.stl", spec, f"{nm}_{mat.lower()}"))
+        rows.append(base | make_project(OUT / "print" / f"{nm}.stl", spec, project))
         if nm == "plate" and levels:
             # Two-colour variant: base layers in one filament, terraces + collar in another.
             z_change = round(c.plate_t + c.two_color_level * c.plate_layer, 2)
@@ -263,7 +326,7 @@ def main(argv=None):
     if not args.no_render:
         from .figures import render_all
 
-        render_all(b, pl, p, c, OUT / "renders")
+        render_all(m_tpu, pl, p, c, OUT / "renders")
         if stream:
             from . import streamplate
             from .figures import flow_spectra, streamline_previews, streamline_renders
@@ -278,7 +341,7 @@ def main(argv=None):
                 flow = (r["xs"], r["ys"], r["shots"][0], None)
             streamline_previews(lyr, region, bands, p, c, OUT / "renders", flow=flow)
             flow_spectra(r, OUT / "renders" / "flow_spectra.png")
-            streamline_renders(lyr, bands, b, pl, p, c, OUT / "renders")
+            streamline_renders(lyr, bands, m_tpu, pl, p, c, OUT / "renders")
         note(f"rendered at {time.time() - t0:.0f} s")
 
     # --- report -------------------------------------------------------------------

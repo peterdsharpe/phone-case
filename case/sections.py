@@ -16,6 +16,8 @@ STYLE = {"phone": ("#8c9586", 0.9), "bumper": ("#303236", 0.95), "plate": ("#4a7
 
 
 def to_trimesh(shape, tol=0.02) -> trimesh.Trimesh:
+    if isinstance(shape, trimesh.Trimesh):
+        return shape
     v, t = shape.tessellate(tol, 0.15)
     return trimesh.Trimesh(np.array([(p.X, p.Y, p.Z) for p in v]), np.array(t), process=True)
 

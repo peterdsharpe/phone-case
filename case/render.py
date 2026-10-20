@@ -27,6 +27,8 @@ COLORS = {
 
 
 def mesh(shape, tol: float = 0.03) -> pv.PolyData:
+    if hasattr(shape, "faces") and hasattr(shape, "vertices") and not callable(shape.faces):  # a trimesh
+        return pv.wrap(shape)
     verts, tris = shape.tessellate(tol, 0.2)
     v = np.array([(p.X, p.Y, p.Z) for p in verts], dtype=float)
     f = np.hstack([np.full((len(tris), 1), 3), np.array(tris)]).ravel()
