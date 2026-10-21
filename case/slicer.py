@@ -22,7 +22,7 @@ import zipfile
 FLATPAK_ID = "com.prusa3d.PrusaSlicer"
 PRINTER = "Original Prusa i3 MK3S & MK3S+ 0.6 nozzle"
 DROP_KEYS = {"inherits", "compatible_printers", "compatible_printers_condition", "compatible_prints",
-             "compatible_prints_condition", "renamed_from", "alias", "printer_model", "printer_variant",
+             "compatible_prints_condition", "renamed_from", "alias",
              "default_print_profile", "default_filament_profile", "default_sla_print_profile",
              "default_sla_material_profile", "printer_vendor"}
 
