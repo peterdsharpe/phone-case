@@ -41,19 +41,20 @@ def side_plane(origin, outward, along) -> bd.Plane:
     return bd.Plane(origin=origin, x_dir=along, z_dir=outward)
 
 
-def flared_cut(plane: bd.Plane, length: float, height: float, depth_in: float, depth_out: float, flare: float,
-               shape=None) -> bd.Part:
-    """Cutter for a side opening: straight from -depth_in to 0 (local z), then flaring
-    by `flare` per side out to +depth_out. Openings widen toward the outside so a
-    fingertip or cable plug can reach in. `shape(length, height)` gives the outline
+def flared_cut(plane: bd.Plane, length: float, height: float, depth_in: float, surface: float, r: float,
+               shape=None, steps: int = 8) -> bd.Part:
+    """Cutter for an opening in a wall whose outer face lies `surface` along the plane's normal
+    (local z): straight from -depth_in, then rounded over into the outer face with radius r
+    (a quarter-circle flare), so the opening widens toward the outside and leaves no sharp
+    outer edge. `shape(length, height, grow)` gives the outline grown by `grow` per side
     (a stadium by default)."""
-    shape = shape or stadium
-    straight = plane.offset(-depth_in) * shape(length, height)
-    start = plane * shape(length, height)
-    end = plane.offset(depth_out) * shape(length + 2 * flare, height + 2 * flare)
-    inner = bd.extrude(straight, depth_in, dir=plane.z_dir)
-    outer = bd.loft([start, end], ruled=True)
-    return inner + outer
+    shape = shape or (lambda w, h, g: stadium(w + 2 * g, h + 2 * g))
+    s0 = surface - r
+    inner = bd.extrude(plane.offset(-depth_in) * shape(length, height, 0.0), depth_in + s0, dir=plane.z_dir)
+    phis = [0.47 * math.pi * k / (steps - 1) for k in range(steps)]  # to ~85 deg, where the arc meets the face
+    secs = [plane.offset(s0 + r * math.sin(f)) * shape(length, height, r * (1 - math.cos(f))) for f in phis]
+    secs.append(plane.offset(surface + 0.5) * shape(length, height, r + 2.0))  # out past the face, near-tangent
+    return inner + bd.loft(secs, ruled=True)
 
 
 # ---- shapely twins (2-D, for the topographic relief) ---------------------------------------

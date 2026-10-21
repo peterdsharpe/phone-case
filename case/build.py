@@ -122,7 +122,7 @@ def print_mesh(b: bd.Part, p: Phone, c: Case) -> trimesh.Trimesh:
     with tempfile.TemporaryDirectory() as d:
         bd.export_stl(b, f"{d}/b.stl", tolerance=0.01, angular_tolerance=0.1)
         m = trimesh.load(f"{d}/b.stl")
-    if c.grip and c.grip_style == "billows":
+    if c.grip and c.grip_style == "flow":
         from . import texture
 
         m = texture.apply(m, p, c)
@@ -339,6 +339,8 @@ def main(argv=None):
                 flow = (xs, ys, np.stack([vx, vy]), s)
             else:
                 flow = (r["xs"], r["ys"], r["shots"][0], None)
+            keep = np.abs(flow[0]) <= p.W / 2 + 0.2  # the figures show the back; the strips past the edges feed the grip
+            flow = (flow[0][keep], flow[1], flow[2][:, keep], None if flow[3] is None else flow[3][keep])
             streamline_previews(lyr, region, bands, p, c, OUT / "renders", flow=flow)
             flow_spectra(r, OUT / "renders" / "flow_spectra.png")
             streamline_renders(lyr, bands, m_tpu, pl, p, c, OUT / "renders")

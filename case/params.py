@@ -105,7 +105,7 @@ class Case:
     vol_post: float = 2.5  # bar splitting a closed volume window (shorter bridges); unused with btn_notch
     btn_notch: bool = True  # button openings run out through the back edge: no bridged overhang
     notch_r: float = 1.5  # corner radius at the notch's front end (no sharp corner to start a crack)
-    cut_flare: float = 0.6  # openings widen by this much at the outer surface
+    cut_round: float = 0.8  # outer edges of the openings are rounded over with this radius
     usb_cut_w: float = 13.4
     usb_cut_h: float = 6.4
     spk_margin: float = 1.0
@@ -115,15 +115,12 @@ class Case:
 
     # --- grip texture on the long sides ---------------------------------------------
     grip: bool = True
-    grip_style: str = "billows"  # "billows": Kelvin-Helmholtz curls (texture.py); "flutes": straight grooves
-    grip_y: tuple[float, float] = (-69.0, 69.0)  # billows: extent along both sides (openings skipped)
-    grip_clear: float = 1.5  # billows: clearance to the button openings
-    grip_groove_w: float = 1.0  # billows: groove width (a 0.6 mm nozzle resolves about 0.8 mm)
-    grip_taper: float = 2.0  # billows: grooves fade out over this length at each end
-    billow_lambda: float = 16.0  # billow spacing along the side
-    billow_C: float = 1.6  # Stuart vortex concentration (1: plain shear layer; larger: tighter vortices)
-    billow_T: float = 3.0  # roll-up time: how far the dye lines have wound
-    billow_spacing: float = 1.5  # dye-line spacing across the shear layer (units of lambda / 2 pi)
+    grip_style: str = "flow"  # "flow": the back's LBM flow carried over the edges (texture.py); "flutes": straight grooves
+    grip_y: tuple[float, float] = (-69.0, 69.0)  # flow: extent along both sides (openings skipped)
+    grip_clear: float = 1.5  # flow: clearance to the button openings
+    grip_sep: float = 2.5  # flow: groove spacing (dithered like the plate's lines; it can halve where the dye compresses)
+    grip_groove_w: float = 1.4  # flow: full width of the cosine groove profile (about half that at half depth)
+    grip_taper: float = 2.0  # flow: grooves fade out over this length at free ends and at the band ends
     grip_depth: float = 0.35
     grip_r: float = 0.55  # flute radius (width ~1 mm at 0.3 mm depth)
     grip_pitch: float = 2.4

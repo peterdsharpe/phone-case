@@ -109,7 +109,8 @@ it there. Either part can be reprinted on its own.
 | Rear rim | 0.6 mm proud of the plate | protects the plate edge and the glass corners |
 | Camera collar | 1.0 mm above the camera bar | the phone can lie on its back; the inner top edge is beveled against flash glare |
 | Buttons | one notch over power and volume, open at the back | a closed window's back edge prints as a long, saggy bridge |
-| Grip | Kelvin–Helmholtz billows, 0.35 mm deep, on both long sides | something to hold, and the same physics as the back |
+| Grip | the back's flow, continued over the edges: grooves along its streaklines, 0.35 mm deep | something to hold, from the same simulation as the back |
+| Opening edges | rounded over into the wall, 0.8 mm radius | nothing sharp under a thumb, and a plug finds its port |
 | Fit | 0.10 mm side clearance in TPU, 0.20 mm in PETG; none in thickness | TPU loosens a little with use; a rigid shell needs room to go on |
 
 ### The back, take 1: a topographic map
@@ -316,22 +317,31 @@ very tight. Both showed where the design fought the printer:
   wall, which printed as loose strands to trim with a knife. They now end in
   45° roofs, which print like any other wall.
 - **Fit.** A rigid PETG shell gets 0.1 mm more room on each side than TPU.
-- **Grip.** The straight grip flutes became Kelvin–Helmholtz billows. A shear
-  layer rolls up into a row of vortices (Stuart's exact solution), and two dye
-  lines carried by that flow wind into breaking-wave curls. The grooves follow
-  them: 1 mm wide, 0.35 mm deep, wide enough for a 0.6 mm nozzle to trace.
-  Unlike the old flutes, they also run above the buttons.
+- **Grip.** The straight grip flutes became the back's flow, carried over the
+  edges. The simulation's domain is five collar-widths wide, so the flow just
+  past the phone's long sides comes from the same solve as the back. Unroll the
+  back over the rim and down a side wall, and each wall lands on a strip of that
+  flow. The grooves follow the strip's dye streaklines, about 2.5 mm apart,
+  thinned by the same dithering as the plate's lines. They are 0.35 mm deep,
+  with a cosine profile that meets the wall without an edge, and they fade out
+  at their ends. Unlike the old flutes, they also run above the buttons.
+- **Edges.** The openings no longer end in square edges. Each one rounds over
+  into the wall with a 0.8 mm radius, and so do the notch's open corners at the
+  back.
 - **Settings.** Both bumpers have tuned profiles: finer layers, cooler nozzles,
   shorter retraction, travel kept inside the walls, and seams away from the
   inside corners (see *Settings and tips* below).
 
-<p align="center">
-  <img src="docs/img/process/billows.jpg" width="100%" alt="The billow groove pattern, flat: a row of breaking-wave curls">
-</p>
-
-<p align="center">
-  <img src="out/renders/side_texture.jpg" width="70%" alt="The button side: billow grooves and the open notch over the buttons">
-</p>
+<table>
+  <tr>
+    <td width="45%"><img src="docs/img/process/side_flow.jpg" alt="The dye field past the phone's long edges, with the strips that fold onto the bumper's sides and their grooves"></td>
+    <td width="55%"><img src="out/renders/side_texture.jpg" alt="The button side: grooves along the streaklines and the open notch over the buttons"></td>
+  </tr>
+  <tr>
+    <td>The dye past the phone's edges, seen from the back. The orange strips fold onto the side walls; the lines are their grooves, with none over the buttons.</td>
+    <td>The button side: the grooves and the open notch.</td>
+  </tr>
+</table>
 
 ## Print it
 
@@ -439,8 +449,8 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 - `Case.fit`, `Case.fit_rigid`: side clearance for the TPU and the PETG bumper.
   Raise one by 0.05 if that bumper is too tight.
 - `Case.btn_notch`: open button notch (default) or closed windows.
-  `Case.grip_style`: `"billows"` or the old `"flutes"`; `billow_lambda`,
-  `billow_C`, `billow_T` and `billow_spacing` shape the billows.
+  `Case.grip_style`: `"flow"` (the back's flow over the edges) or the old
+  `"flutes"`; `grip_sep` sets the groove spacing.
 - `Case.design`: `"streamlines"` (the default), `"karman"`, `"topo"`, or `"none"`.
 - `Case.stream_phase`, `stream_bands`, `dye_smooth`: which snapshot, how many
   color pieces, and how fine the dye structure is.
@@ -458,7 +468,7 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 |---|---|
 | `case/params.py` | every dimension, with sources and ranges |
 | `case/phone.py`, `bumper.py`, `plate.py` | the phone model, the bumper, the back plate and collar |
-| `case/texture.py` | the billow grip texture, cut into the bumper's print mesh |
+| `case/texture.py` | the grip texture: the back's flow carried over the edges, cut into the bumper's print mesh |
 | `case/lbm.py`, `lbm_gpu.py`, `streamflow.py` | lattice-Boltzmann flow and dye past the collar (CPU and GPU) |
 | `case/spectra.py` | the spectral health check |
 | `case/contourpaths.py` | dithered contours of the dye: the toolpaths |

@@ -6,6 +6,8 @@ height can be uniform while the long sides bevel down for edge-swipe gestures.
 
 from __future__ import annotations
 
+import math
+
 import build123d as bd
 
 from .geom import flared_cut, outline, prism, rr, ruled, side_plane, stadium
@@ -51,7 +53,7 @@ def bumper(p: Phone = PHONE, c: Case = CASE) -> bd.Part:
     window = prism(window_sk, zb - 1.0, -c.plate_t)
 
     cutters = [cav, relief, throat, bevel, pocket, window, *side_openings(p, c)]
-    if c.grip and c.grip_style == "flutes":  # the "billows" texture is cut into the print mesh (texture.py)
+    if c.grip and c.grip_style == "flutes":  # the "flow" texture is cut into the print mesh (texture.py)
         cutters.append(grip_flutes(p, c))
     for cut in cutters:
         body = body - cut
@@ -63,7 +65,7 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
     zc = p.T / 2
     cuts = []
     depth_in = c.fit + 0.6  # start inside the cavity
-    depth_out = c.wall + 0.4
+    surface = c.wall - 0.2  # from the cutting planes (0.2 outside the cavity) to the outer face
 
     # Right side (+x): power, then volume. With btn_notch the openings run out through the
     # back edge (open notches): printed lip-down, a closed window's back edge is a long bridge.
@@ -72,12 +74,15 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
         if c.btn_notch:
             z_hi, z_lo = zc + h / 2, c.z_back - 1.0
             pl = side_plane((x, (y0 + y1) / 2, (z_hi + z_lo) / 2), (1, 0, 0), (0, 1, 0))
-            shape = lambda w, hh: rr(w, hh, c.notch_r)  # noqa: E731 - rounded corners at the notch's front end
+            shape = lambda w, hh, g: rr(w + 2 * g, hh + 2 * g, c.notch_r + g)  # noqa: E731 - rounded front corners
             reach = c.fit + 0.2 + c.flange_reach + 0.4  # past the rim's inner edge, or a strip of rim bridges the notch
-            cuts.append(flared_cut(pl, y1 - y0, z_hi - z_lo, reach, depth_out - 0.2, c.cut_flare, shape))
+            cuts.append(flared_cut(pl, y1 - y0, z_hi - z_lo, reach, surface, c.cut_round, shape))
+            xa, xo = p.W / 2 - c.flange_reach - 0.6, c.outer_W(p) / 2
+            cuts.extend(_round_corner(xa, xo, y, c.z_back, c.cut_round, s, c.cut_round, c.back_fillet)
+                        for y, s in ((y0, +1), (y1, -1)))
             return
         pl = side_plane((x, (y0 + y1) / 2, zc), (1, 0, 0), (0, 1, 0))
-        cuts.append(flared_cut(pl, y1 - y0, h, depth_in + 0.2, depth_out - 0.2, c.cut_flare))
+        cuts.append(flared_cut(pl, y1 - y0, h, depth_in + 0.2, surface, c.cut_round))
 
     m = c.btn_margin
     v_hi = p.from_top(p.vol_top) + m
@@ -85,7 +90,7 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
     v_mid = (v_hi + v_lo) / 2
     if c.btn_notch:  # one notch for both buttons: separate notches would leave a loose tooth between them
         right(v_lo, p.from_top(p.power_top) + m, c.btn_cut_h)
-        return _bottom_and_top(p, c, cuts, zc, depth_in, depth_out)
+        return _bottom_and_top(p, c, cuts, zc, depth_in, surface)
     right(p.from_top(p.power_top + p.power_len) - m, p.from_top(p.power_top) + m, c.btn_cut_h)
     if c.vol_post > 0:
         right(v_mid + c.vol_post / 2, v_hi, c.btn_cut_h)
@@ -96,14 +101,41 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
         cuts.append(bd.Pos(p.W / 2 + depth / 2 - 0.25, (y0 + y1) / 2, zc) * bd.Box(depth + 0.5, y1 - y0, p.btn_h + 1.0))
     else:
         right(v_lo, v_hi, c.btn_cut_h)
-    return _bottom_and_top(p, c, cuts, zc, depth_in, depth_out)
+    return _bottom_and_top(p, c, cuts, zc, depth_in, surface)
 
 
-def _bottom_and_top(p: Phone, c: Case, cuts: list, zc: float, depth_in: float, depth_out: float) -> list[bd.Part]:
+def _round_corner(x0: float, xo: float, y: float, z: float, r: float, side: int, flare: float, bf: float) -> bd.Part:
+    """Cutter that rounds, with radius r, the convex edge along x where a notch end face (at y,
+    material on the -side side) meets the back face (z), from x0 out through the outer face xo.
+    Near xo it follows the notch's quarter-circle flare (radius `flare`, flared_cut) and the back
+    fillet (radius bf), so every y-z section is a right-angle corner rounded by r."""
+    eps, c45 = 0.1, math.cos(math.pi / 4)
+
+    def section(x: float, g: float, zb: float) -> bd.Face:
+        ye = y - side * g
+        P = lambda u, v: bd.Vector(x, u, v)  # noqa: E731
+        cy, cz = ye - side * r, zb + r  # arc centre, r into the material
+        pts = [P(cy, zb), P(cy, zb - eps), P(ye + side * eps, zb - eps), P(ye + side * eps, cz), P(ye, cz)]
+        arc = bd.ThreePointArc(P(ye, cz), P(cy + side * r * c45, cz - r * c45), P(cy, zb))
+        return bd.Face(bd.Wire([*bd.Polyline(*pts).edges(), arc]))
+
+    def fillet_z(x: float) -> float:  # the back surface's height at depth x (back fillet near the wall)
+        t = min(max(x - (xo - bf), 0.0), bf)
+        return z + bf - math.sqrt(bf * bf - t * t)
+
+    phis = [0.47 * math.pi * k / 7 for k in range(8)]  # the flare's sections (flared_cut, steps=8)
+    xs = [x0] + [xo - flare + flare * math.sin(f) for f in phis]
+    secs = [section(x, flare * (1 - math.cos(f)) if k else 0.0, fillet_z(x))
+            for k, (x, f) in enumerate(zip(xs, [0.0] + phis))]
+    secs.append(section(xo + 0.5, flare + 2.0, z + bf))  # out past the face
+    return bd.loft(secs, ruled=True)
+
+
+def _bottom_and_top(p: Phone, c: Case, cuts: list, zc: float, depth_in: float, surface: float) -> list[bd.Part]:
     # Bottom (-y): speaker, USB-C, microphone.
     def bottom(x: float, length: float, h: float):
         pl = side_plane((x, -(p.L / 2 + c.fit + 0.2), zc), (0, -1, 0), (1, 0, 0))
-        cuts.append(flared_cut(pl, length, h, depth_in + 0.2, depth_out - 0.2, c.cut_flare))
+        cuts.append(flared_cut(pl, length, h, depth_in + 0.2, surface, c.cut_round))
 
     bottom(0.0, c.usb_cut_w, c.usb_cut_h)
     sx0, sx1 = p.spk_x0 - c.spk_margin, p.spk_x1 + c.spk_margin
@@ -112,7 +144,7 @@ def _bottom_and_top(p: Phone, c: Case, cuts: list, zc: float, depth_in: float, d
 
     # Top (+y): microphone.
     pl = side_plane((p.mic_top_x, p.L / 2 + c.fit + 0.2, zc), (0, 1, 0), (-1, 0, 0))
-    cuts.append(flared_cut(pl, c.mic_cut_w, c.mic_cut_h, depth_in + 0.2, depth_out - 0.2, c.cut_flare))
+    cuts.append(flared_cut(pl, c.mic_cut_w, c.mic_cut_h, depth_in + 0.2, surface, c.cut_round))
     return cuts
 
 
