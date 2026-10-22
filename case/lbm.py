@@ -192,7 +192,7 @@ class Wake:
 
 
 def run(w: Wake, body_mask_fn, window: tuple[float, float, float, float], body_width: float,
-        progress: bool = True) -> dict:
+        progress: bool = True, pad_y: float = 0.0) -> dict:
     """Simulate; return snapshots of (ux, uy) over `window` = (x0, x1, y0, y1) in phone mm.
 
     body_mask_fn(X, Y) -> bool array marks the obstacle at phone coordinates."""
@@ -225,7 +225,8 @@ def run(w: Wake, body_mask_fn, window: tuple[float, float, float, float], body_w
     n_total = n_spin + every * w.snapshots
     k = max(1, int(round(w.store_dx / w.dx)))  # block size for the stored snapshots
     ii = np.where((xs >= x0 - w.store_dx) & (xs <= x1 + w.store_dx))[0]
-    jj = np.where((ys >= y0 - w.store_dx) & (ys <= y1 + w.store_dx))[0]
+    m_y = max(w.store_dx, pad_y)  # rows stored past the window's ends; the domain itself is set by the window
+    jj = np.where((ys >= y0 - m_y) & (ys <= y1 + m_y))[0]
     ii, jj = ii[: len(ii) // k * k], jj[: len(jj) // k * k]
 
     def block(a):
@@ -279,11 +280,11 @@ def run(w: Wake, body_mask_fn, window: tuple[float, float, float, float], body_w
                 every=every, U=w.U, omega=omega, grid=(NI, NJ))
 
 
-def cached(w: Wake, body_mask_fn, body_tag: str, window, body_width) -> dict:
+def cached(w: Wake, body_mask_fn, body_tag: str, window, body_width, pad_y: float = 0.0) -> dict:
     path = DATA / f"wake_{w.key(body_tag)}.npz"
     if not path.exists():
         print(f"LBM: Re {w.Re:g}, collar {body_width:.1f} mm wide; caching to {path.name}", flush=True)
-        r = run(w, body_mask_fn, window, body_width)
+        r = run(w, body_mask_fn, window, body_width, pad_y=pad_y)
         DATA.mkdir(exist_ok=True)
         r["shots"] = r["shots"].astype(np.float16)  # plenty for streamlines; halves the cache
         np.savez_compressed(path, meta=json.dumps(asdict(w)), **{k: np.asarray(v) for k, v in r.items()})

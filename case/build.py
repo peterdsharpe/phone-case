@@ -23,68 +23,7 @@ from .geom import outline_shp, stadium_shp
 from .params import CASE, PHONE, Case, Phone
 from .phone import phone_solid
 from .plate import collar_size, plate
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-OUT = ROOT / "out"
-DENSITY = {"TPU": 1.21, "PETG": 1.27, "PLA": 1.24}  # g/cm^3
-
-# Print settings on top of Prusa's presets (MK3S+, 0.6 mm hardened-steel nozzle).
-# The bumpers are tuned for finish. 0.12 mm layers smooth the walls and 45-degree faces; Prusa's
-# profile stops at 0.15 for this nozzle (lifted below), and much thinner than 0.1 the wide nozzle
-# face drags on the layer below and the flow gets erratic.
-BUMPER = dict(
-    min_layer_height=0.07, layer_height=0.12, first_layer_height=0.15,
-    perimeters=2, perimeter_generator="arachne",
-    perimeter_extrusion_width=0.7, external_perimeter_extrusion_width=0.7,
-    top_solid_layers=6, bottom_solid_layers=6, top_fill_pattern="concentric", bottom_fill_pattern="concentric",
-    external_perimeter_speed=25, perimeter_speed=35, small_perimeter_speed=20, first_layer_speed=15,
-    # Overhangs (the bottom openings, the rim's bevel): slower and cooler the more a line overhangs.
-    enable_dynamic_overhang_speeds=1, overhang_speed_0=12, overhang_speed_1=15, overhang_speed_2=20, overhang_speed_3=25,
-    bridge_speed=20, thick_bridges=0,
-    # Seams at the top end, away from the inside corners; scarf joints ramp them in where the contour is smooth.
-    seam_position="rear", seam_gap="10%", staggered_inner_seams=1,
-    scarf_seam_placement="everywhere", scarf_seam_only_on_smooth=1, scarf_seam_length=15,
-    # Travel stays inside the ring, so no strings cross the cavity or the openings.
-    avoid_crossing_perimeters=1, travel_speed=180,
-    elefant_foot_compensation=0.15, skirts=1, skirt_distance=3, brim_width=0, support_material=0,
-)
-TPU = dict(  # a 95A TPU; Prusa's MK3-compatible Ultrafuse TPU-95A preset is the closest match
-    print="0.15mm DETAIL @0.6 nozzle MK3", filament="Ultrafuse TPU-95A",
-    overrides=dict(
-        BUMPER, filament_settings_id="TPU 95A (phone-case bumper)",
-        fill_density="25%", fill_pattern="gyroid",
-        temperature=235, first_layer_temperature=235,  # 10 C below the first print: less stringing at this low flow
-        bed_temperature=50, first_layer_bed_temperature=50,
-        filament_max_volumetric_speed=1.8, extrusion_multiplier=1.05,  # Generic FLEX's 1.15 over-extrudes a 95A
-        filament_retract_length=0.8, filament_retract_speed=25, filament_deretract_speed=20,
-        filament_retract_lift=0, filament_retract_before_travel=2, filament_wipe=0,  # no z-hop: it strings
-        min_fan_speed=40, max_fan_speed=70, bridge_fan_speed=80, fan_always_on=1,
-    ),
-)
-PETG_BUMPER = dict(
-    print="0.15mm DETAIL @0.6 nozzle MK3", filament="Prusament PETG @0.6 nozzle",
-    overrides=dict(
-        BUMPER, filament_settings_id="Prusament PETG (phone-case bumper)",
-        fill_density="100%", fill_pattern="rectilinear",
-        temperature=240, first_layer_temperature=240,  # 10 C below the first print; inside Prusament's 250 +- 10
-        filament_max_volumetric_speed=10,
-        filament_retract_length=0.8, filament_retract_lift=0.2, filament_wipe=1,
-        bridge_fan_speed=80, enable_dynamic_fan_speeds=1,
-        overhang_fan_speed_0=90, overhang_fan_speed_1=70, overhang_fan_speed_2=50, overhang_fan_speed_3=35,
-    ),
-)
-PETG = dict(
-    print="0.15mm DETAIL @0.6 nozzle MK3", filament="Prusament PETG @0.6 nozzle",
-    overrides=dict(
-        perimeters=2, perimeter_generator="arachne", top_solid_layers=5, bottom_solid_layers=4,
-        fill_density="100%", fill_pattern="rectilinear",  # solid: stiff, and no infill pattern behind clear PETG
-        temperature=250, first_layer_temperature=250,  # +10 C for hardened steel at 0.6 flow
-        top_fill_pattern="monotonic", seam_position="rear", skirts=1, skirt_distance=3,
-        brim_width=0, support_material=0,
-    ),
-)
-# PLA plate, for the streamline layer's bright palette. +10 C for hardened steel, as for PETG.
-PLA = dict(PETG, filament="Prusament PLA", overrides=dict(PETG["overrides"], temperature=225, first_layer_temperature=225))
+from .profiles import BUMPER, DENSITY, OUT, PETG, PETG_BUMPER, PLA, RING, ROOT, TPU  # noqa: F401
 
 
 def relief(p: Phone, c: Case):
@@ -246,8 +185,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-slice", action="store_true")
     ap.add_argument("--no-render", action="store_true")
+    ap.add_argument("--style", choices=("fused", "clamped"), default=CASE.style,
+                    help="fused: one-piece case with a camera ring (default); clamped: the v2 bumper and plate")
     args = ap.parse_args(argv)
-    p, c = PHONE, CASE
+    p, c = PHONE, dataclasses.replace(CASE, style=args.style)
     for d in ("print", "cad", "profiles", "renders"):
         (OUT / d).mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -258,6 +199,9 @@ def main(argv=None):
     def note(msg):
         print(msg, flush=True)
         log.append(msg)
+
+    if c.style == "fused":
+        return build_fused(p, c, args, note, t0)
 
     # --- geometry -----------------------------------------------------------------
     levels, region = relief(p, c)
@@ -320,7 +264,7 @@ def main(argv=None):
         if nm == "plate" and levels:
             # Two-colour variant: base layers in one filament, terraces + collar in another.
             z_change = round(c.plate_t + c.two_color_level * c.plate_layer, 2)
-            rows.append(base | dict(part="plate, two-colour") |
+            rows.append(base | dict(part="plate, two-color") |
                         make_project(OUT / "print" / "plate.stl", spec, "plate_petg_2color",
                                      events=[(z_change, "color", "#1c1d24")]))
     note(f"sliced at {time.time() - t0:.0f} s")
@@ -350,7 +294,7 @@ def main(argv=None):
 
     # --- report -------------------------------------------------------------------
     lines = ["# Build report", "", f"Built by `python -m case.build` in {time.time() - t0:.0f} s.", "",
-             "| part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | colour changes |",
+             "| part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | color changes |",
              "|---|---|---|---|---|---|---|"]
     for r in rows:
         lines.append(f"| {r['part']} | {r['material']} | {r['model_g']} | {r['size']} | {r.get('time', '-')} | {r.get('grams', '-')} | {r.get('M600', '-')} |")
@@ -361,6 +305,118 @@ def main(argv=None):
               + (f", {len(levels)} layers, {sum(h for _, h in levels):.2f} mm tall" if levels else "")]
     (OUT / "REPORT.md").write_text("\n".join(lines) + "\n")
     note(f"done in {time.time() - t0:.0f} s")
+
+
+def build_fused(p: Phone, c: Case, args, note, t0: float) -> None:
+    """The fused case (case/shell.py): the main part (PETG back and TPU walls, one print) and the
+    camera ring (PETG)."""
+    from . import fused, shell, toolpath
+
+    body = shell.main_part(p, c)
+    back, walls = shell.split(body, p, c)
+    ring = shell.camera_ring(p, c)
+    for nm, part in (("case", body), ("back (PETG)", back), ("walls (TPU)", walls), ("camera ring", ring)):
+        assert part.is_valid and len(part.solids()) == 1, f"{nm}: invalid or split into pieces"
+    ph = phone_solid(p)
+    clash = {"case/phone": (body & ph).volume, "ring/phone": (ring & ph).volume, "ring/case": (ring & body).volume}
+    note(f"geometry built in {time.time() - t0:.0f} s; overlaps (mm^3): " + ", ".join(f"{k} {v:.3f}" for k, v in clash.items()))
+    m_petg, m_tpu, m_ring = fused.print_meshes(p, c, (back, walls, ring))
+    note(f"print meshes at {time.time() - t0:.0f} s ({len(m_tpu.faces)} triangles in the textured walls)")
+
+    # --- exports ------------------------------------------------------------------
+    for nm, m in (("case_back_petg", m_petg), ("case_walls_tpu", m_tpu), ("camera_ring", m_ring)):
+        m.export(OUT / "print" / f"{nm}.stl")
+    body.label, ring.label = "case (PETG back + TPU walls)", "camera ring (PETG)"
+    phone_ref = phone_solid(p)
+    phone_ref.label = "Pixel 9 Pro XL (reference)"
+    bd.export_step(bd.Compound([back, walls, ring, phone_ref]), str(OUT / "cad" / "fused_assembly.step"))
+    bd.export_step(body, str(OUT / "cad" / "case_fused.step"))  # without the grip texture (print mesh only)
+    bd.export_step(ring, str(OUT / "cad" / "camera_ring.step"))
+    note(f"exported STL/STEP at {time.time() - t0:.0f} s")
+
+    def size_of(*ms):
+        lo = np.min([m.bounds[0] for m in ms], axis=0); hi = np.max([m.bounds[1] for m in ms], axis=0)
+        return " x ".join(f"{v:.1f}" for v in hi - lo)
+
+    g_petg, g_tpu = m_petg.volume / 1000 * DENSITY["PETG"], m_tpu.volume / 1000 * DENSITY["TPU"]
+    rows = [dict(part="case (main part)", material="PETG back + TPU walls", model_g=f"{g_petg:.1f} + {g_tpu:.1f}",
+                 size=size_of(m_petg, m_tpu)),
+            dict(part="camera ring", material="PETG", model_g=f"{m_ring.volume / 1000 * DENSITY['PETG']:.1f}",
+                 size=size_of(m_ring))]
+    stream_report, r = [], None
+    if not args.no_slice:
+        r = fused.build_main(p, c, m_petg, m_tpu, note)
+        lyr, bands, info = r["layer"], r["bands"], r["info"]
+        grams = [float(g) for g in r["stats"].get("grams", "0, 0").split(",")]
+        g_layer = info["filament_mm"] * toolpath.A_FIL / 1000 * DENSITY["PETG"]
+        grams[0] += g_layer - info["removed_mm"] * toolpath.A_FIL / 1000 * DENSITY["PETG"]  # the layer replaces the slicer's
+        h, mnt = divmod(round(r["minutes"]), 60)
+        rows[0] |= dict(time=f"~{h}h {mnt:02d}m", grams=f"{grams[0]:.1f} PETG ({g_layer:.1f} of it the streamline layer) + "
+                                                        f"{grams[-1]:.1f} TPU", M600=str(r["M600"]))
+        rows[1] |= make_project(OUT / "print" / "camera_ring.stl", RING, "camera_ring_petg")
+        stream_report = [
+            "## Main part: print sequence", "",
+            "`out/print/case_streamlines_petg.gcode` is the print (`out/print/case_fused.3mf` is the project, for "
+            "inspection: slicing it gives a plain first layer). One job, three M600 stops:", "",
+            "1. Black PETG: purge line and a 5 mm brim.",
+            f"2. M600: the streamline layer, {lyr.h:g} mm, the back's visible face: {len(lyr.lines)} lines, "
+            f"{r['length'] / 1000:.1f} m of path, {info['filament_mm']:.0f} mm of filament, about {info['minutes']:.0f} min, "
+            f"fed piece by piece (cut list below). Coverage {r['coverage']:.1%}.",
+            f"3. M600: black PETG for the rest of the back ({c.back_layers} layers of {c.back_layer:g} mm; the top is ironed).",
+            f"4. M600: TPU for the walls. The first {fused.HOT_LAYERS} TPU layers print at {fused.HOT} C with the fan off, "
+            f"for the bond to the PETG; then the TPU's own temperature and a {fused.BED_TPU} C bed.", "",
+            f"Supports: organic, on painted enforcers only; {len(r['enforcers'])} overhangs needed one. The lips' "
+            "undersides are 45 degrees, and the openings' tops bridge.", "",
+            f"Flow snapshot: spectral check passed ({spectra_describe(r['health'])}; `out/renders/flow_spectra.png`).", "",
+            "Cut list for the streamline layer (bands of equal dye-label range, in print order). Add about 30 mm to the "
+            "first piece for the purge and 80 mm to the last so the extruder can still grip it:", "",
+            "| piece | filament (mm) | color |", "|---|---|---|",
+            *[f"| {k + 1}{' (outline)' if k == 0 and lyr.n_frame else ''} | {mm:.0f} | "
+              f"{toolpath.PALETTES['petg'][2][k % 4][0]} |" for k, (_, _, mm) in enumerate(bands)],
+        ]
+    note(f"sliced at {time.time() - t0:.0f} s")
+
+    if not args.no_render:
+        from .figures import flow_spectra, fused_renders, fused_sections, print_sequence, streamline_previews
+
+        walls_m = m_tpu.copy()
+        walls_m.apply_translation([0, 0, -c.back_t])  # back to the phone frame
+        fused_sections(walls_m, back, ring, p, c, OUT / "renders" / "fused_sections.png")
+        if r is not None:
+            from . import streamplate
+            from .geom import rr_shp
+            from .streamflow import snapshot
+
+            snap = snapshot(p, c, c.stream_phase)
+            xs, ys, s_, (vx, vy) = streamplate.field(snap, 0, c.dye_smooth)
+            keep = np.abs(xs) <= c.outer_W(p) / 2 + 0.2
+            flow = (xs[keep], ys, np.stack([vx, vy])[:, keep], s_[keep])
+            outer = rr_shp(c.outer_W(p), c.outer_L(p), c.outer_corner_r)
+            streamline_previews(r["layer"], shell.back_face(p, c), r["bands"], p, c, OUT / "renders", flow=flow, outer=outer,
+                                rim="#2a2d3a", palettes=("petg",))  # PETG only: the layer bonds to the PETG back
+            flow_spectra(snap, OUT / "renders" / "flow_spectra.png")
+            fused_renders(walls_m, back, ring, r["layer"], r["bands"], p, c, OUT / "renders")
+            print_sequence(r["gcode"], r["layer"], r["bands"], lambda q: np.asarray(q) + fused.BED_CENTER, c.back_t,
+                           OUT / "renders" / "print_sequence.png")
+        note(f"rendered at {time.time() - t0:.0f} s")
+
+    # --- report -------------------------------------------------------------------
+    lines = ["# Build report (fused case)", "", f"Built by `python -m case.build` in {time.time() - t0:.0f} s.", "",
+             "| part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | color changes |",
+             "|---|---|---|---|---|---|---|"]
+    for row in rows:
+        lines.append(f"| {row['part']} | {row['material']} | {row['model_g']} | {row['size']} | {row.get('time', '-')} | "
+                     f"{row.get('grams', '-')} | {row.get('M600', '-')} |")
+    lines += ["", "Overlap check (mm^3, should be 0): " + ", ".join(f"{k} {v:.3f}" for k, v in clash.items()), ""]
+    lines += stream_report
+    (OUT / "REPORT.md").write_text("\n".join(lines) + "\n")
+    note(f"done in {time.time() - t0:.0f} s")
+
+
+def spectra_describe(health) -> str:
+    from . import spectra
+
+    return spectra.describe(health)
 
 
 if __name__ == "__main__":

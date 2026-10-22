@@ -57,6 +57,31 @@ def flared_cut(plane: bd.Plane, length: float, height: float, depth_in: float, s
     return inner + bd.loft(secs, ruled=True)
 
 
+def round_notch_corner(x0: float, xo: float, y: float, zs, r: float, side: int, flare: float, dz: int = 1,
+                       steps: int = 8) -> bd.Part:
+    """Cutter that rounds, with radius r, the convex edge along x where a notch's end face (at
+    y, material on the -side side) meets a face at height zs(x): material above it for dz = +1,
+    below it for dz = -1. It runs from x0 out through the outer face xo, following the notch's
+    quarter-circle flare (radius `flare`, see flared_cut) near xo, so every y-z section is a
+    right-angle corner rounded by r."""
+    eps, c45 = 0.1, math.cos(math.pi / 4)
+
+    def section(x: float, g: float, z0: float) -> bd.Face:
+        ye = y - side * g
+        P = lambda u, v: bd.Vector(x, u, v)  # noqa: E731
+        cy, cz = ye - side * r, z0 + dz * r  # arc centre, r into the material
+        pts = [P(cy, z0), P(cy, z0 - dz * eps), P(ye + side * eps, z0 - dz * eps), P(ye + side * eps, cz), P(ye, cz)]
+        arc = bd.ThreePointArc(P(ye, cz), P(cy + side * r * c45, cz - dz * r * c45), P(cy, z0))
+        return bd.Face(bd.Wire([*bd.Polyline(*pts).edges(), arc]))
+
+    phis = [0.47 * math.pi * k / (steps - 1) for k in range(steps)]  # flared_cut's sections
+    xs = [x0] + [xo - flare + flare * math.sin(f) for f in phis]
+    gs = [0.0] + [flare * (1 - math.cos(f)) for f in phis]
+    secs = [section(x, g, zs(x)) for x, g in zip(xs, gs)]
+    secs.append(section(xo + 0.5, flare + 2.0, zs(xo + 0.5)))  # out past the face
+    return bd.loft(secs, ruled=True)
+
+
 # ---- shapely twins (2-D, for the topographic relief) ---------------------------------------
 
 def rr_shp(w: float, h: float, r: float, segs: int = 24) -> shapely.Polygon:

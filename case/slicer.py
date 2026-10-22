@@ -169,3 +169,88 @@ def add_custom_gcode(project: pathlib.Path, events: list[tuple[float, str, str]]
     xml = ('<?xml version="1.0" encoding="utf-8"?>\n<custom_gcodes_per_print_z>\n' + "\n".join(items) +
            '\n<mode value="SingleExtruder"/>\n</custom_gcodes_per_print_z>\n')
     _replace_in_zip(project, {"Metadata/Prusa_Slicer_custom_gcode_per_print_z.xml": xml})
+
+
+# ---- two materials on one nozzle, swapped by hand ------------------------------------------
+
+# Options with one value per extruder in a printer config.
+EXTRUDER_KEYS = {"nozzle_diameter", "extruder_colour", "extruder_offset", "max_layer_height", "min_layer_height",
+                 "retract_length", "retract_lift", "retract_lift_above", "retract_lift_below", "retract_speed",
+                 "deretract_speed", "retract_restart_extra", "retract_before_travel", "retract_layer_change", "wipe",
+                 "retract_before_wipe", "retract_length_toolchange", "retract_restart_extra_toolchange"}
+_QUOTED = {"start_filament_gcode", "end_filament_gcode", "filament_notes", "filament_ramming_parameters"}
+_STRING_VEC = {"filament_type", "filament_colour", "filament_settings_id", "extruder_colour"}
+
+
+def semm_config(print_name: str, fil1: str, over1: dict, fil2: str, over2: dict, common: dict) -> dict[str, str]:
+    """Config for two materials on the MK3S's single nozzle without an MMU: PrusaSlicer's
+    single-extruder multi-material mode, no wipe tower, and M600 (unload, wait for the user,
+    load, purge) as the tool change. Per-filament and per-extruder options get one value per
+    material. PrusaSlicer still writes T0/T1 lines, which the build strips (strip_tool_selects)."""
+    c1 = config(print_name, fil1, {**common, **over1})
+    c2 = config(print_name, fil2, {**common, **over2})
+    fil_keys = (set(preset("filament", fil1)) | set(preset("filament", fil2)) | {
+        k for k in {**over1, **over2} if k.startswith(("filament_", "temperature", "first_layer_temperature",
+                                                       "bed_temperature", "first_layer_bed_temperature"))
+        or k in {"extrusion_multiplier", "min_fan_speed", "max_fan_speed", "bridge_fan_speed", "fan_always_on",
+                 "cooling", "disable_fan_first_layers", "start_filament_gcode"}}) - DROP_KEYS
+    cfg = dict(c1)
+    for k in sorted(fil_keys | EXTRUDER_KEYS):
+        if k == "filament_vendor":
+            continue
+        a, b = c1.get(k, c2.get(k, "")), c2.get(k, c1.get(k, ""))
+        if a.startswith('"') or b.startswith('"') or k in _QUOTED:
+            q = lambda v: v if v.startswith('"') else f'"{v}"'  # noqa: E731
+            cfg[k] = f"{q(a)};{q(b)}"
+        elif k in _STRING_VEC:
+            cfg[k] = f"{a};{b}"
+        else:
+            cfg[k] = f"{a},{b}"
+    cfg.update({k: str(v) for k, v in dict(
+        single_extruder_multi_material=1, wipe_tower=0,
+        # Not at the initial tool selection (previous_extruder = -1): only a real swap.
+        toolchange_gcode="{if previous_extruder >= 0}; manual swap: filament {previous_extruder+1} -> "
+                         "{next_extruder+1} ({filament_type[next_extruder]})\\nM600\\n{endif}",
+    ).items()})
+    return cfg
+
+
+def strip_tool_selects(text: str) -> str:
+    """Drop PrusaSlicer's T<n> lines: without an MMU the firmware only answers "Invalid extruder"."""
+    return "\n".join(s for s in text.splitlines() if not re.fullmatch(r"T\d+\s*", s)) + "\n"
+
+
+def write_multipart_3mf(path: pathlib.Path, name: str, volumes: list, at=(125.0, 105.0)) -> None:
+    """A .3mf with one object made of several volumes: volumes = [(name, trimesh, metadata)],
+    metadata like {"extruder": "2"} or {"volume_type": "SupportEnforcer"}. Mesh coordinates are
+    the object's (z = 0 on the bed); `at` places the object on the bed."""
+    verts, tris, vols, off = [], [], [], 0
+    for vname, m, meta in volumes:
+        t0 = len(tris)
+        verts += [f'     <vertex x="{x:.5f}" y="{y:.5f}" z="{z:.5f}"/>' for x, y, z in m.vertices]
+        tris += [f'     <triangle v1="{a + off}" v2="{b + off}" v3="{c + off}"/>' for a, b, c in m.faces]
+        off += len(m.vertices)
+        md = "".join(f'\n   <metadata type="volume" key="{k}" value="{v}"/>'
+                     for k, v in {"name": vname, "volume_type": "ModelPart", **meta}.items())
+        vols.append(f'  <volume firstid="{t0}" lastid="{len(tris) - 1}">{md}\n  </volume>')
+    model = ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" '
+             'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
+             'xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">\n'
+             ' <metadata name="slic3rpe:Version3mf">1</metadata>\n <resources>\n  <object id="1" type="model">\n'
+             '   <mesh>\n    <vertices>\n' + "\n".join(verts) + '\n    </vertices>\n    <triangles>\n' + "\n".join(tris) +
+             '\n    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build>\n'
+             f'  <item objectid="1" transform="1 0 0 0 1 0 0 0 1 {at[0]} {at[1]} 0" printable="1"/>\n </build>\n</model>\n')
+    mc = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n <object id="1" instances_count="1">\n'
+          f'  <metadata type="object" key="name" value="{name}"/>\n' + "\n".join(vols) + '\n </object>\n</config>\n')
+    ct = ('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+          '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>\n')
+    rels = ('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+            '</Relationships>\n')
+    path.unlink(missing_ok=True)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", ct)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("3D/3dmodel.model", model)
+        z.writestr("Metadata/Slic3r_PE_model.config", mc)

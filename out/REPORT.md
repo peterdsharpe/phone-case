@@ -1,40 +1,41 @@
-# Build report
+# Build report (fused case)
 
-Built by `python -m case.build` in 42 s.
+Built by `python -m case.build` in 21 s.
 
-| part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | colour changes |
+| part | material | model mass (g) | size as printed (mm) | print time | filament (g, slicer) | color changes |
 |---|---|---|---|---|---|---|
-| bumper_tpu | TPU | 10.9 | 79.6 x 165.8 x 11.7 | 1h 40m 1s | 10.88 | 0 |
-| bumper_petg | PETG | 11.7 | 79.8 x 166.0 x 11.7 | 1h 33m 0s | 11.88 | 0 |
-| plate | PETG | 17.8 | 76.1 x 162.3 x 4.6 | 44m 13s + ~27 min | 23.31 | 2 |
-| plate (PLA option) | PLA | 17.3 | 76.1 x 162.3 x 4.6 | 42m 39s + ~27 min | 22.75 | 2 |
-| test_fit_band | TPU | 5.7 | 79.6 x 165.8 x 5.9 | 51m 41s | 5.74 | 0 |
-| test_camera | PETG | 3.8 | 76.1 x 44.5 x 4.6 | 18m 10s | 3.96 | 0 |
+| case (main part) | PETG back + TPU walls | 16.6 + 7.1 | 79.6 x 165.8 x 11.1 | ~3h 05m | 18.1 PETG (6.1 of it the streamline layer) + 7.0 TPU | 3 |
+| camera ring | PETG | 1.6 | 76.2 x 28.2 x 4.6 | 15m 49s | 1.90 | 0 |
 
-Overlap check (mm^3, should be 0): bumper/phone 0.000, PETG bumper/phone 0.000, plate/phone 0.000, bumper/plate 0.000
+Overlap check (mm^3, should be 0): case/phone 0.000, ring/phone 0.000, ring/case 0.000
 
-## Streamline layer
+## Main part: print sequence
+
+`out/print/case_streamlines_petg.gcode` is the print (`out/print/case_fused.3mf` is the project, for inspection: slicing it gives a plain first layer). One job, three M600 stops:
+
+1. Black PETG: purge line and a 5 mm brim.
+2. M600: the streamline layer, 0.45 mm, the back's visible face: 903 lines, 18.4 m of path, 2007 mm of filament, about 37 min, fed piece by piece (cut list below). Coverage 97.4%.
+3. M600: black PETG for the rest of the back (6 layers of 0.12 mm; the top is ironed).
+4. M600: TPU for the walls. The first 3 TPU layers print at 250 C with the fan off, for the bond to the PETG; then the TPU's own temperature and a 60 C bed.
+
+Supports: organic, on painted enforcers only; 0 overhangs needed one. The lips' undersides are 45 degrees, and the openings' tops bridge.
 
 Flow snapshot: spectral check passed (divergence/vorticity variance 2.1e-05 (limit 1e-03), enstrophy high/mid band 1.1e-06 (limit 1e-02), bump near Nyquist: no; `out/renders/flow_spectra.png`).
 
-`out/print/plate_streamlines_petg.gcode` is the plate's G-code with the streamline layer spliced in at z = 1.7 mm (0.45 mm thick): 780 lines, 15.6 m of path, 1714 mm of filament, about 27 min. Coverage 97.5%.
+Cut list for the streamline layer (bands of equal dye-label range, in print order). Add about 30 mm to the first piece for the purge and 80 mm to the last so the extruder can still grip it:
 
-Cut list (bands of equal dye-label range, i.e. equal widths of the inlet, in print order). Add about 30 mm to the first piece for the purge and 80 mm to the last so the extruder can still grip it:
-
-| piece | filament (mm) | PETG plate | PLA plate |
-|---|---|---|---|
-| 1 (outline) | 73 | white | gold |
-| 2 | 17 | Galaxy Black | white |
-| 3 | 40 | white | matte red |
-| 4 | 40 | translucent | black |
-| 5 | 118 | white | gold |
-| 6 | 271 | Galaxy Black | white |
-| 7 | 249 | white | matte red |
-| 8 | 347 | translucent | black |
-| 9 | 189 | white | gold |
-| 10 | 77 | Galaxy Black | white |
-| 11 | 75 | white | matte red |
-| 12 | 133 | translucent | black |
-| 13 | 84 | white | gold |
-
-Relief: streamlines
+| piece | filament (mm) | color |
+|---|---|---|
+| 1 (outline) | 87 | white |
+| 2 | 19 | Galaxy Black |
+| 3 | 50 | white |
+| 4 | 57 | translucent |
+| 5 | 116 | white |
+| 6 | 280 | Galaxy Black |
+| 7 | 341 | white |
+| 8 | 377 | translucent |
+| 9 | 267 | white |
+| 10 | 86 | Galaxy Black |
+| 11 | 91 | white |
+| 12 | 148 | translucent |
+| 13 | 88 | white |

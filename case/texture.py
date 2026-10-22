@@ -34,13 +34,20 @@ def _ramp(d, w):
 
 
 def band_z(p: Phone, c: Case) -> tuple[float, float]:
-    """Height range of the textured band on the side walls (clear of the back fillet and front chamfer)."""
+    """Height range of the textured band on the side walls: TPU only (fused case: above the
+    PETG back, below the flush top's chamfer), clear of the edges."""
+    if c.style == "fused":
+        return 0.3, p.T + c.fit_z - c.top_chamfer - 0.3
     return c.z_back + c.back_fillet + 0.3, c.z_front(p) - c.front_chamfer - 0.3
 
 
 def unroll(p: Phone, c: Case) -> tuple[float, float]:
-    """(a, zs): with the back unrolled over the rim and the back fillet, a side wall point at
-    height z lies a + (z - zs) from the phone's centre line."""
+    """(a, zs): with the back unrolled over its edge (fused case: the base chamfer; two-part
+    case: the rim and its back fillet), a side wall point at height z lies a + (z - zs) from
+    the phone's centre line."""
+    if c.style == "fused":
+        b = c.base_chamfer
+        return c.outer_W(p) / 2 - b + np.sqrt(2) * b, -c.back_t + b
     zs = c.z_back + c.back_fillet
     return c.outer_W(p) / 2 - c.back_fillet + np.pi / 2 * c.back_fillet, zs
 

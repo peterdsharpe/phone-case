@@ -10,7 +10,7 @@ import math
 
 import build123d as bd
 
-from .geom import flared_cut, outline, prism, rr, ruled, side_plane, stadium
+from .geom import flared_cut, outline, prism, round_notch_corner, rr, ruled, side_plane, stadium
 from .params import CASE, PHONE, Case, Phone
 from .plate import collar_size, plate_blank
 
@@ -105,30 +105,12 @@ def side_openings(p: Phone, c: Case) -> list[bd.Part]:
 
 
 def _round_corner(x0: float, xo: float, y: float, z: float, r: float, side: int, flare: float, bf: float) -> bd.Part:
-    """Cutter that rounds, with radius r, the convex edge along x where a notch end face (at y,
-    material on the -side side) meets the back face (z), from x0 out through the outer face xo.
-    Near xo it follows the notch's quarter-circle flare (radius `flare`, flared_cut) and the back
-    fillet (radius bf), so every y-z section is a right-angle corner rounded by r."""
-    eps, c45 = 0.1, math.cos(math.pi / 4)
-
-    def section(x: float, g: float, zb: float) -> bd.Face:
-        ye = y - side * g
-        P = lambda u, v: bd.Vector(x, u, v)  # noqa: E731
-        cy, cz = ye - side * r, zb + r  # arc centre, r into the material
-        pts = [P(cy, zb), P(cy, zb - eps), P(ye + side * eps, zb - eps), P(ye + side * eps, cz), P(ye, cz)]
-        arc = bd.ThreePointArc(P(ye, cz), P(cy + side * r * c45, cz - r * c45), P(cy, zb))
-        return bd.Face(bd.Wire([*bd.Polyline(*pts).edges(), arc]))
-
-    def fillet_z(x: float) -> float:  # the back surface's height at depth x (back fillet near the wall)
+    """Round the notch's open corner at the back face z, which curls up into the back fillet
+    (radius bf) near the outer face xo."""
+    def fillet_z(x: float) -> float:  # the back surface's height at depth x
         t = min(max(x - (xo - bf), 0.0), bf)
         return z + bf - math.sqrt(bf * bf - t * t)
-
-    phis = [0.47 * math.pi * k / 7 for k in range(8)]  # the flare's sections (flared_cut, steps=8)
-    xs = [x0] + [xo - flare + flare * math.sin(f) for f in phis]
-    secs = [section(x, flare * (1 - math.cos(f)) if k else 0.0, fillet_z(x))
-            for k, (x, f) in enumerate(zip(xs, [0.0] + phis))]
-    secs.append(section(xo + 0.5, flare + 2.0, z + bf))  # out past the face
-    return bd.loft(secs, ruled=True)
+    return round_notch_corner(x0, xo, y, fillet_z, r, side, flare, dz=1)
 
 
 def _bottom_and_top(p: Phone, c: Case, cuts: list, zc: float, depth_in: float, surface: float) -> list[bd.Part]:

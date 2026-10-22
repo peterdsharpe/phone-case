@@ -30,7 +30,9 @@ def field(r: dict, phase: int, smooth: float):
     return xs, ys, gaussian_filter(dye, smooth / (xs[1] - xs[0]), mode="nearest"), (v[0], v[1])
 
 
-def layer(p: Phone, c: Case, region: shapely.Geometry, em: float = 1.0, w: lbm.Wake | None = None) -> toolpath.Layer:
+def layer(p: Phone, c: Case, region: shapely.Geometry, em: float = 1.0, w: lbm.Wake | None = None,
+          z: float | None = None) -> toolpath.Layer:
+    """The streamline layer over `region`, printed at height z (default: on top of the plate)."""
     width = c.stream_sep + c.stream_h * (1 - np.pi / 4)  # extruded width at this spacing
     area = region.buffer(-width / 2)  # line edges stay inside the region
     r = snapshot(p, c, c.stream_phase, w or lbm.Wake())
@@ -60,7 +62,8 @@ def layer(p: Phone, c: Case, region: shapely.Geometry, em: float = 1.0, w: lbm.W
             vals = np.r_[vals, vals[k]]
         o = np.argsort(vals, kind="stable")
         lines, spacing, vals = [lines[k] for k in o], [spacing[k] for k in o], vals[o]
-    return toolpath.Layer(lines, vals, z=round(c.plate_t + c.stream_h, 4), h=c.stream_h, d_sep=c.stream_sep,
+    z = round(c.plate_t + c.stream_h if z is None else z, 4)
+    return toolpath.Layer(lines, vals, z=z, h=c.stream_h, d_sep=c.stream_sep,
                           em=em, spacing=spacing, n_frame=len(frame) if c.stream_source == "dye" else 0)
 
 

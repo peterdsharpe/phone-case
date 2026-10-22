@@ -139,9 +139,11 @@ def sections(b, plate_part, p: Phone, c: Case, path: pathlib.Path) -> None:
 
 
 
-def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path, flow=None) -> None:
+def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path, flow=None, outer=None,
+                        rim: str = "#9aa59a", palettes=None) -> None:
     """Toolpaths and predicted colours of the streamline layer, seen from the back.
-    flow = (xs, ys, v, dye) adds the flow figure (vorticity, dye) and the four-step pipeline strip."""
+    flow = (xs, ys, v, dye) adds the flow figure (vorticity, dye) and the four-step pipeline strip.
+    outer: the part's outline round the region (default the phone's), drawn in `rim`."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -165,7 +167,7 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
                 verts += list(xy); codes += [MPath.MOVETO] + [MPath.LINETO] * (len(xy) - 2) + [MPath.CLOSEPOLY]
         return PathPatch(MPath(verts, codes), **kw)
 
-    plate_shape = outline_shp(p, 0.0)
+    plate_shape = outline_shp(p, 0.0) if outer is None else outer
     H = 9.0
     aspect = (p.W + 6) / (p.L + 6)
     lw = (lyr.d_sep + 0.05) * H * 72 / (p.L + 6)  # printed width in points
@@ -175,7 +177,7 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
         ax.set_aspect(1); ax.axis("off")
 
     def frame(ax, base):
-        ax.add_patch(patch(plate_shape, facecolor="#9aa59a", edgecolor="none"))  # TPU rim (Hazel-ish grey)
+        ax.add_patch(patch(plate_shape, facecolor=rim, edgecolor="none"))  # the rim round the layer
         ax.add_patch(patch(region, facecolor=base, edgecolor="none"))
         limits(ax)
 
@@ -205,8 +207,9 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
     plt.close(fig)
 
     # 2. predicted colours, one panel per palette
-    fig, axes = plt.subplots(1, len(PALETTES), figsize=(len(PALETTES) * H * aspect + 0.6, H + 0.5))
-    for ax, key in zip(np.atleast_1d(axes), PALETTES):
+    keys = list(PALETTES) if palettes is None else list(palettes)
+    fig, axes = plt.subplots(1, len(keys), figsize=(len(keys) * H * aspect + 0.6, H + 0.5))
+    for ax, key in zip(np.atleast_1d(axes), keys):
         ax.set_title(draw_colors(ax, key), fontsize=9)
     fig.subplots_adjust(0.01, 0.0, 0.99, 0.96, wspace=0.04)
     fig.savefig(out / "streamline_colors.png", dpi=170)
@@ -260,7 +263,7 @@ def streamline_previews(lyr, region, bands, p: Phone, c: Case, out: pathlib.Path
     draw_toolpaths(axes[2], scale=h / H)
     draw_colors(axes[3], "petg", scale=h / H)
     titles = ["1. Simulate the wake\n(vorticity)", "2. Follow the dye\n(streaklines)",
-              "3. Contour it into toolpaths\n(dithered)", "4. Feed colour by hand\n(PETG pieces)"]
+              "3. Contour it into toolpaths\n(dithered)", "4. Feed color by hand\n(PETG pieces)"]
     for ax, t in zip(axes, titles):
         ax.set_title(t, fontsize=11)
     fig.subplots_adjust(0.005, 0.0, 0.995, 0.9, wspace=0.05)
@@ -328,6 +331,144 @@ def streamline_renders(lyr, bands, b, plate_part, p: Phone, c: Case, out: pathli
           [(-88, -133, -109), (5, -40, -2), UP], zoom=1.0, fit=False)
     shoot(scene("petg", raking=True), str(out / "stream_bead_detail.jpg"),
           [(-75, -95, -70), (5, -35, -2), UP], zoom=1.0, fit=False)
+
+
+def fused_renders(walls, back, ring, lyr, bands, p: Phone, c: Case, out: pathlib.Path) -> None:
+    """The fused case on the phone. The streamline layer is the back's bed-side face, so it is
+    flat: drawn as a coloured skin on the black back. walls: the textured TPU mesh in the phone
+    frame."""
+    from .toolpath import mix
+
+    mw, mb, mr = mesh(walls), mesh(back), mesh(ring)
+    parts = {k: mesh(v) for k, v in phone_parts(p).items()}
+    _, _, seq = PALETTES["petg"]
+    pieces = [(seq[k % len(seq)][1], mm) for k, (_, _, mm) in enumerate(bands)]
+    widths = [lyr.widths(k) for k in range(len(lyr.lines))]
+    skin = ridge_mesh(lyr.lines, mix(lyr, pieces), widths, -c.back_t - 0.004, 0.012)
+
+    def scene(screen=False, raking=None):
+        pl = plotter()
+        if raking:
+            pl.add_light(pv.Light(position=raking[0], focal_point=raking[1], intensity=0.8, light_type="scene light"))
+        _phone(pl, parts, screen=screen)
+        add(pl, mw, COLORS["tpu"], specular=0.3)
+        add(pl, mb, COLORS["galaxy"], specular=0.5)
+        add(pl, mr, COLORS["galaxy"], specular=0.6)
+        pl.add_mesh(skin, scalars="rgb", rgb=True, smooth_shading=True, specular=0.6, specular_power=40, ambient=0.2)
+        return pl
+
+    shoot(scene(), str(out / "fused_back.jpg"), [(-150, -60, -300), (0, -4, -2), UP], zoom=1.0)
+    shoot(scene(), str(out / "fused_plan.jpg"), [(0, 0, -400), (0, 0, -2), UP], zoom=1.0, parallel=True)
+    shoot(scene(screen=True), str(out / "fused_front.jpg"), [(160, -50, 300), (0, -4, 5), UP], zoom=1.0)
+    # The bottom corners keep their lip; the bottom and the long sides are flush with the screen.
+    shoot(scene(screen=True), str(out / "fused_corner.jpg"), [(-95, -150, 110), (-26, -68, 5), UP], zoom=0.75, fit=False)
+    # The palm side (left, seen from the screen) in raking light: the grip and the flush top.
+    shoot(scene(screen=True, raking=((0, 200, 30), (-39, 0, 3))), str(out / "fused_side.jpg"),
+          [(-175, -135, 75), (-22, 2, 3), UP], zoom=1.0, fit=False)
+    shoot(scene(), str(out / "fused_camera.jpg"), [(-90, 0, -160), (5, 52, -2), UP], zoom=0.75, fit=False)
+
+    # Assembly order: the ring drops into the case, then the phone.
+    pl = plotter()
+    add(pl, mw, COLORS["tpu"], specular=0.3)
+    add(pl, mb, COLORS["galaxy"], specular=0.5)
+    add(pl, mr.translate((0, 0, 30)), COLORS["galaxy"], specular=0.6)
+    _phone(pl, parts, dz=70)
+    shoot(pl, str(out / "fused_exploded.jpg"), [(-330, -260, 150), (0, 10, 32), (0, 0, 1)], zoom=1.05)
+
+
+
+def print_sequence(gcode: pathlib.Path, lyr, bands, to_bed, z_tpu: float, path: pathlib.Path) -> None:
+    """The main part's print in four layers, drawn from its G-code: the brim and the hand-fed
+    streamline layer (predicted colours), the black back's top (ironed), the first TPU layer,
+    and the lips."""
+    import re
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+
+    from .toolpath import mix
+
+    segs: dict[float, list] = {}
+    z, typ, x, y = 0.0, "", 0.0, 0.0
+    for s in gcode.read_text(errors="ignore").splitlines():
+        if s.startswith(";Z:"):
+            z = round(float(s[3:]), 3)
+        elif s.startswith(";TYPE:"):
+            typ = s[6:]
+        elif s.startswith(";STREAMLINE_LAYER_START"):
+            typ = "streamline"
+        elif s.startswith("G1"):
+            d = dict(re.findall(r"\b([XYE])(-?[\d.]+)", s.split(";")[0]))
+            nx, ny = float(d.get("X", x)), float(d.get("Y", y))
+            if "E" in d and float(d["E"]) > 0 and (nx, ny) != (x, y) and typ != "streamline":
+                segs.setdefault(z, []).append(((x, y), (nx, ny), typ))
+            x, y = nx, ny
+    zs = sorted(segs)
+    z1 = min(q for q in zs if q > 0.01)  # the purge line before it carries no ;Z: marker
+    z_iron = max(q for q in zs if q <= z_tpu + 1e-6)
+    z_t = min(q for q in zs if q > z_tpu)
+    z_lip = zs[-3]
+    _, _, seq = PALETTES["petg"]
+    cols = mix(lyr, [(seq[k % len(seq)][1], mm) for k, (_, _, mm) in enumerate(bands)])
+    fig, axes = plt.subplots(1, 4, figsize=(15, 8.6))
+    black, tpu, bed = "#23252e", "#6f757e", "#e4e2dc"
+    pt_mm = 0.98 * 3.6 * 72 / 94  # points per mm at this panel size
+    titles = [f"1. Layer 1 ({lyr.h:g} mm): black brim, then the\nstreamline layer, fed by hand",
+              f"2. Top of the black PETG back\n(z {z_iron:g} mm, ironed)",
+              f"3. First TPU layer (z {z_t:g} mm):\nhot, fan off, for the bond",
+              f"4. The lips (z {z_lip:g} mm): top edge\nand corners; the rest is flush"]
+    for k, (ax, title) in enumerate(zip(axes, titles)):
+        zz = [z1, z_iron, z_t, z_lip][k]
+        lines = segs.get(zz, [])
+        if k == 0:
+            brim = [(a, b) for a, b, t in lines if t.startswith("Skirt")]
+            ax.add_collection(LineCollection(brim, lw=0.62 * pt_mm, color=black))
+            pts = [to_bed(l) for l in lyr.lines]
+            rgb = [0.5 * (cl[:-1] + cl[1:]) for cl in cols]
+            ax.add_collection(LineCollection([sg for q in pts for sg in np.stack([q[:-1], q[1:]], 1)],
+                                             colors=np.vstack(rgb), lw=0.6 * pt_mm))
+        else:
+            col = black if zz <= z_tpu + 1e-6 else tpu
+            ax.add_collection(LineCollection([(a, b) for a, b, t in lines if t != "Ironing"], lw=0.62 * pt_mm, color=col))
+            iron = [(a, b) for a, b, t in lines if t == "Ironing"]
+            if iron:  # every fourth ironing pass, or they merge into grey
+                ax.add_collection(LineCollection(iron[::4], lw=0.25, color="#9aa3b5", alpha=0.8))
+        ax.set_facecolor("#8d8a83" if k == 0 else bed)  # a mid-grey bed under white and black beads
+        ax.set_xlim(78, 172); ax.set_ylim(14, 196); ax.set_aspect(1)
+        ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(title, fontsize=10)
+    fig.subplots_adjust(0.01, 0.01, 0.99, 0.9, wspace=0.04)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def fused_sections(walls, back, ring, p: Phone, c: Case, path: pathlib.Path) -> None:
+    from .sections import STYLE
+
+    STYLE.setdefault("ring", ("#24476b", 0.95))
+    M = {"phone": to_trimesh(phone_solid(p)), "plate": to_trimesh(back), "bumper": walls, "ring": to_trimesh(ring)}
+    hw, hl = p.W / 2, p.L / 2
+    d = np.array([1, 1, 0]) / np.sqrt(2)
+    cx, cy = -(hw - p.corner_r), -(hl - p.corner_r)
+    zt = c.z_front(p) + 1
+    views = [
+        dict(name="Left side (y = -30): flush with the screen, 45-degree lean-in",
+             origin=(0, -30, 0), normal=(0, 1, 0), u=(-1, 0, 0), xlim=(33, 41), ylim=(-2, zt)),
+        dict(name="Left side (y = 66): the ramp up to the corner lip",
+             origin=(0, 66, 0), normal=(0, 1, 0), u=(-1, 0, 0), xlim=(33, 41), ylim=(-2, zt)),
+        dict(name="Bottom-left corner (diagonal): lip, corner pocket",
+             origin=(cx, cy, 0), normal=(d[1], -d[0], 0), u=tuple(-d), xlim=(9, 17.5), ylim=(-2, zt)),
+        dict(name="Top end through the camera ring (x = 0)",
+             origin=(0, 0, 0), normal=(1, 0, 0), u=(0, 1, 0), xlim=(40, 84), ylim=(c.collar_top(p) - 1, zt)),
+        dict(name="Bottom end at USB-C (x = 0): notch open to the front",
+             origin=(0, 0, 0), normal=(1, 0, 0), u=(0, -1, 0), xlim=(74, 84), ylim=(-2, zt)),
+        dict(name="Right side at the volume rocker: notch open to the front",
+             origin=(0, p.from_top(p.vol_top + p.vol_len / 2), 0), normal=(0, 1, 0), u=(1, 0, 0), xlim=(33, 41), ylim=(-2, zt)),
+    ]
+    section_figure(M, views, str(path), "Cross-sections: phone (green), TPU walls (dark), PETG back (blue), camera ring (navy)")
 
 
 def flow_spectra(r: dict, path: pathlib.Path) -> None:

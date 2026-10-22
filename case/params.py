@@ -61,7 +61,21 @@ class Phone:
 
 @dataclass(frozen=True)
 class Case:
-    """Two-part case: a TPU bumper that holds a rigid back plate against the phone."""
+    """The case. style "fused" (default): one print, a PETG back with TPU walls printed on top of
+    it, plus a separate PETG camera ring (case/shell.py). style "clamped": a TPU bumper that
+    holds a rigid back plate (case/bumper.py, case/plate.py)."""
+
+    style: str = "fused"
+
+    # --- fused case: back, edges, camera ring -----------------------------------------
+    back_layer: float = 0.12  # layer height above the first layer, PETG and TPU alike: organic supports
+    #   refuse per-height layer ranges, and 0.12 is what the TPU walls print best at
+    back_layers: int = 6  # black PETG layers over the streamline layer: back_t = stream_h + 6 x 0.12 = 1.17
+    base_chamfer: float = 0.6  # 45-degree chamfer round the back's outer edge (on the bed: no elephant foot lip)
+    flush_ramp: float = 6.0  # the lip tapers down to the screen over this length where the flush edges begin
+    ring_clear: float = 0.2  # gap round the camera ring, in the back's opening and its flange recess
+    ring_flange: float = 1.0  # the ring's flange reaches this far past the ring (it keeps the ring from falling out)
+    ring_flange_t: float = 0.48  # flange thickness = recess depth, so the phone sits flat on back and flange
 
     # --- fit -------------------------------------------------------------------
     fit: float = 0.10  # side clearance, phone to bumper. TPU refs use 0 to 0.2
@@ -74,7 +88,8 @@ class Case:
     corner_relief_r: float = 9.0  # inner corner pocket -> ~1.3 mm air gap at each corner
     corner_relief_margin: float = 1.0  # pocket stops this far from the front/back faces
     relief_roof: float = 1.3  # 45-degree roof at the pocket's back end (its ceiling when printed lip-down)
-    front_chamfer: float = 0.5  # outer edge on the bed when printing
+    front_chamfer: float = 0.5  # two-part bumper: outer edge at the front (screen side)
+    top_chamfer: float = 0.8  # fused case: outer edge at the front (screen side)
     back_fillet: float = 0.8
 
     # --- front lip -------------------------------------------------------------
@@ -146,6 +161,8 @@ class Case:
     #   are barely pressed onto the layer below. The rim stands plate_t + flange_proud - stream_h = 0.15 mm proud.
     stream_sep: float = 0.55  # line spacing; 0.65 mm wide lines at 0.45 mm layers
     stream_flow: float = 5.0  # mm^3/s cap on the streamline layer: tall, wide lines slow down (and pieces last longer)
+    stream_speed: float = 20.0  # mm/s, the streamline layer's printing speed (fused case: it is the first layer)
+    stream_travel: float = 60.0  # mm/s, its travel: unhurried, so each hand-fed piece lasts longer
     stream_phase: int = 8  # which of the 16 snapshots over one shedding period
     stream_bands: int = 12  # colour pieces in the cut list (equal stream-function ranges)
     base_layer: float = 0.25  # plate layers under the streamline layer (hidden, so thick)
@@ -162,6 +179,11 @@ class Case:
 
     def outer_L(self, p: Phone) -> float:
         return p.L + 2 * (self.fit + self.wall)
+
+    @property
+    def back_t(self) -> float:
+        """Fused case: thickness of the PETG back (the streamline layer plus the black layers)."""
+        return round(self.stream_h + self.back_layers * self.back_layer, 4)
 
     @property
     def z_back(self) -> float:

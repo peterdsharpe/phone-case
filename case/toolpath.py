@@ -293,8 +293,9 @@ def line_feed(pts: np.ndarray, es: np.ndarray, m: Machine) -> float:
 
 def gcode_block(layer: Layer, to_bed, m: Machine, retracted: float, start_xy: tuple[float, float],
                 change_before: bool, change_after: bool, park_xy: tuple[float, float] = (125.0, 12.0),
-                color: str = "#ffffff") -> list[str]:
-    """G-code for the layer. `retracted` is the retraction the block inherits and hands back.
+                color: str = "#ffffff", hand_back: float | None = None) -> list[str]:
+    """G-code for the layer. `retracted` is the retraction the block inherits; it hands back
+    `hand_back` (default: the same).
 
     Colour changes follow PrusaSlicer's own pattern: M600 is called with the filament
     primed (the firmware unloads, reloads and purges, and hands back a primed nozzle)."""
@@ -333,9 +334,47 @@ def gcode_block(layer: Layer, to_bed, m: Machine, retracted: float, start_xy: tu
     if change_after:  # park off the plate so the purge return cannot blob on the finished layer
         out += [f"G1 Z{z + m.lift:.3f} F{m.z_f:.0f}", f"G1 X{park_xy[0]:.3f} Y{park_xy[1]:.3f} F{m.travel_f:.0f}",
                 ";COLOR_CHANGE,T0,#1c1d24", "M600"]
-    retract_to(retracted)
+    retract_to(retracted if hand_back is None else hand_back)
     out += [f"G1 Z{z + m.lift:.3f} F{m.z_f:.0f}", ";STREAMLINE_LAYER_END"]
     return out
+
+
+def _state(lines: list[str]) -> tuple[float, float, float]:
+    """Retraction (mm of filament pulled back) and XY position after these G-code lines."""
+    retracted, x, y = 0.0, 0.0, 0.0
+    for s in lines:
+        if s.startswith("G1"):
+            xy = dict(_XY.findall(s)); e = _E.search(s)
+            if "X" in xy: x = float(xy["X"])
+            if "Y" in xy: y = float(xy["Y"])
+            if e:
+                de = float(e.group(1))
+                if xy and de > 0:
+                    retracted = 0.0
+                else:
+                    retracted -= de
+    return max(retracted, 0.0), x, y
+
+
+def splice_first_layer(text: str, layer: Layer, to_bed, m: Machine) -> tuple[str, dict]:
+    """Make the layer the print's first layer: keep PrusaSlicer's start code, purge line and
+    brim, and replace the rest of its first layer with the layer, between two colour changes."""
+    lines = text.splitlines()
+    i0 = lines.index(";LAYER_CHANGE")
+    if lines[i0 + 1] != f";Z:{layer.z:g}":
+        raise RuntimeError(f"first layer is {lines[i0 + 1]}, not ;Z:{layer.z:g}")
+    i1 = lines.index(";LAYER_CHANGE", i0 + 1)
+    b0 = lines.index(";TYPE:Skirt/Brim", i0, i1)
+    b1 = next(k for k in range(b0 + 1, i1) if lines[k].startswith(";TYPE:"))  # the part's own first layer starts
+    if any(s.startswith(";TYPE:Support") for s in lines[b1:i1]):
+        raise RuntimeError("the sliced first layer has supports, which the streamline layer would replace")
+    retracted, x, y = _state(lines[:b1])
+    hand_back, _, _ = _state(lines[:i1])  # what PrusaSlicer's second layer expects
+    block = gcode_block(layer, to_bed, m, retracted, (x, y), True, True, hand_back=hand_back)
+    removed = sum(float(e.group(1)) for s in lines[b1:i1] if s.startswith("G1") and _XY.search(s)
+                  and (e := _E.search(s)) and float(e.group(1)) > 0)
+    out = "\n".join(lines[:b1] + block + lines[i1:]) + "\n"
+    return out, dict(inserted_lines=len(block), removed_lines=i1 - b1, removed_mm=removed, at_line=b1) | block_stats(block, (x, y))
 
 
 _E = re.compile(r"\bE(-?[\d.]+)")

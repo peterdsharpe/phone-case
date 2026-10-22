@@ -1,15 +1,16 @@
 # A phone case printed along a turbulent wake
 
-A parametric, drop-first case for the Google Pixel 9 Pro XL, in two printed
-parts: a bumper that takes the hits (TPU, or PETG for a stiffer shell), and a
-PETG back plate. The plate's visible face is one layer of custom toolpaths. They trace dye through a
-simulated turbulent wake: the wake of air flowing past the phone's own camera
-bar. Short pieces of filament, fed into the printer one after another, become
-streams of dye.
+A parametric, drop-first case for the Google Pixel 9 Pro XL, printed in one job
+in two materials. The back is PETG, and its visible face is one layer of custom
+toolpaths. They trace dye through a simulated turbulent wake: the wake of air
+flowing past the phone's own camera bar. Short pieces of filament, fed into the
+printer one after another, become streams of dye. Then the printer switches to
+TPU and builds the walls straight onto the back. A small PETG ring frames the
+camera bar.
 
 <p align="center">
-  <img src="out/renders/stream_back_petg.jpg" width="49%" alt="The case from the back: black, white and gray dye streams swirl down the plate below the camera bar">
-  <img src="out/renders/stream_wake_closeup.jpg" width="49%" alt="Close-up of the printed beads in raking light, rolled up into vortices">
+  <img src="out/renders/fused_back.jpg" width="49%" alt="The case from the back: black, white and gray dye streams swirl across the back below the camera ring">
+  <img src="out/renders/fused_camera.jpg" width="49%" alt="Close-up of the camera end: the black ring around the camera bar, with the flow parting around it">
 </p>
 
 <p align="center">
@@ -22,11 +23,12 @@ by the flow (2), contours of that label as toolpaths (3), and the colors of the
 filament pieces as they will blend in the hotend (4).
 
 > [!NOTE]
-> **Status:** the phone has arrived and the first bumpers are printed, in TPU
-> and in PETG. This version fixes what they showed (see [the first
-> prints](#the-first-prints)); it and the back plate are not printed yet. The
-> phone's dimensions come from Google's published size and from published cases.
-> [MEASURE.md](MEASURE.md) lists what to check with calipers.
+> **Status:** this is version 3, and it is not printed yet. Versions 1 and 2,
+> a bumper and a separate back plate, are still in the repo (`--style
+> clamped`). Their bumpers are printed, in TPU and in PETG (see [the first
+> prints](#the-first-prints)). The phone's dimensions come from Google's
+> published size and from published cases. [MEASURE.md](MEASURE.md) lists what
+> to check with calipers.
 
 Everything is Python and rebuilds with one command:
 
@@ -40,36 +42,28 @@ Everything is Python and rebuilds with one command:
 
 <table>
   <tr>
-    <td width="50%"><img src="out/renders/stream_plan_petg.jpg" alt="The back, straight on"></td>
-    <td width="50%"><img src="out/renders/stream_collar_closeup.jpg" alt="The camera collar with the flow parting around it"></td>
+    <td width="50%"><img src="out/renders/fused_plan.jpg" alt="The back, straight on"></td>
+    <td width="50%"><img src="out/renders/fused_front.jpg" alt="The front of the case on the phone"></td>
   </tr>
   <tr>
-    <td>Straight on. The flow comes in from the top and rolls up below the camera bar.</td>
-    <td>Under the collar, in raking light: the shear layers break into small eddies.</td>
+    <td>Straight on. The flow comes in from the top, parts around the camera ring and rolls up below it, out to the edges of the back.</td>
+    <td>The front. The long sides and the bottom are flush with the screen, so edge swipes start on the case. The top edge keeps its lip.</td>
   </tr>
   <tr>
-    <td><img src="out/renders/stream_bead_detail.jpg" alt="Bead detail"></td>
-    <td><img src="out/renders/stream_back_pla_gold.jpg" alt="The same plate in gold, white, red and black PLA"></td>
+    <td><img src="out/renders/fused_corner.jpg" alt="The bottom-left corner from the front"></td>
+    <td><img src="out/renders/fused_side.jpg" alt="The palm side in raking light"></td>
   </tr>
   <tr>
-    <td>Each bead is as wide as the strip it fills, from 0.47 to 1.0 mm.</td>
-    <td>The same plate in PLA: gold, white, matte red and black. Brighter, but PLA softens near 55 °C.</td>
+    <td>The bottom corners keep their lip, the first thing to land in a fall, and ramp down to the flush edges on either side.</td>
+    <td>The palm side: grooves along the back's own flow, carried over the edge.</td>
   </tr>
   <tr>
-    <td><img src="out/renders/front.jpg" alt="The front of the case"></td>
-    <td><img src="out/renders/corner_closeup.jpg" alt="Corner and power button"></td>
+    <td><img src="out/renders/fused_exploded.jpg" alt="Exploded view: case, camera ring, phone"></td>
+    <td><img src="out/renders/print_sequence.png" alt="Four layers of the print: the streamline layer, the black back, the first TPU layer, the lips"></td>
   </tr>
   <tr>
-    <td>The front: a 1.4 mm lip all round, beveled low on the long sides for edge gestures.</td>
-    <td>Thick corners, where drops land, with an air pocket behind the wall. One open notch leaves both buttons free.</td>
-  </tr>
-  <tr>
-    <td><img src="out/renders/camera_closeup.jpg" alt="Camera collar"></td>
-    <td><img src="out/renders/exploded.jpg" alt="Exploded view: phone, plate, bumper"></td>
-  </tr>
-  <tr>
-    <td>The collar stands 1 mm above the camera bar, so the phone can lie on its back.</td>
-    <td>Two parts. The bumper's rim holds the plate in, with no glue.</td>
+    <td>Assembly: the ring drops into the case from the inside, then the phone holds it in.</td>
+    <td>The print, from its G-code: the hand-fed first layer, the black back, the first TPU layer and the lips.</td>
   </tr>
 </table>
 
@@ -83,22 +77,77 @@ ports and camera bar sit. Those positions come from Pixel 9 Pro XL cases
 published on Printables: one includes its author's caliper measurements, and one says it
 was built from Google's CAD. Most positions agree within about 1 mm, and
 `case/params.py` records the range next to each value. The build checks that
-phone, bumper and plate don't overlap, and draws cross-sections of the fit:
+phone, case and ring don't overlap, and draws cross-sections of the fit:
 
 <p align="center">
-  <img src="out/renders/sections.png" width="85%" alt="Cross-sections of phone, bumper and plate">
+  <img src="out/renders/fused_sections.png" width="85%" alt="Cross-sections of phone, case and camera ring">
 </p>
 
-### Two parts, because of the camera bar
+### Version 3: one print, two materials
+
+Version 2 was two parts held together by the phone: a bumper, and a back plate
+with the camera collar. Version 3 prints the back and the walls in one job and
+changes material partway up. The first 1.17 mm is PETG: the 0.45 mm streamline
+layer, then six black layers. Then the printer stops, the PETG comes out, TPU
+goes in, and the walls grow from the back's top face. The two materials meet on
+a flat face the size of the walls' footprint. Forum reports on TPU printed over
+PETG range from a bond that won't come apart to one that peels off, so the print
+gives it every chance: the first three TPU layers go down at 250 °C with the fan
+off, onto a back that is still warm from the bed.
+
+The camera bar is why version 2 had two parts: a back printed face-down can't
+carry a raised collar without supports. Version 3 leaves an opening in the back
+and prints the collar as its own small ring, with a flange. The ring goes into
+the case from the inside before the phone, its flange sits in a 0.48 mm recess
+in the back, and the phone holds it there.
+
+The lip over the screen is gone from the long sides and the bottom. There the
+walls stop at the screen and lean in at 45° over the phone's rounded edge,
+which holds the phone in with about 0.5 mm of overlap. The top edge keeps its
+lip, and so do all four corners, where falls land first. Ramps 6 mm long join
+the two. The notch over the buttons now opens to the front, with no strip of
+wall across it, and so does the USB-C opening: with the wall's top at the
+screen, a strip above the port would be about 1 mm thick.
+
+Every overhang is 45° or less: the lips' undersides, the corner pockets' roofs
+and the lean-in. The build paints support enforcers on any face past
+PrusaSlicer's 55° support threshold and slices with organic supports, but the
+only such faces are the tops of the speaker and microphone holes. Those print as
+short bridges, as they did on version 2, so the print has no supports.
+
+| Feature | Value | Why |
+|---|---|---|
+| Back | 1.17 mm of PETG: the 0.45 mm streamline layer and six 0.12 mm black layers | stiff and flat; thin for wireless charging |
+| Walls | 1.4 mm TPU, printed onto the back | soft where it hits, and one print |
+| Long sides, bottom | flush with the screen, leaning in 45° over the phone's edge | edge swipes from either side |
+| Top edge, corners | 1.4 mm lip above the screen | face-down falls land on the lip; corners land first |
+| Corners | 2.4 mm TPU plus a 1.3 mm air pocket | a corner hit compresses TPU into the pocket before it reaches the glass |
+| Buttons, USB-C | open to the front, with rounded corners | no thin strip of wall above them |
+| Camera | a separate PETG ring, 1 mm above the camera bar | no supports; the phone can lie on its back |
+| Outer edges | 0.8 mm chamfer at the front, 0.6 mm at the back | nothing sharp; no elephant's foot on the bed |
+| Grip | the back's flow over the edges, grooves 0.35 mm deep | as in version 2, on the TPU only |
+| Fit | 0.10 mm side clearance | TPU loosens a little with use |
+
+### Version 2: two parts, because of the camera bar
 
 The camera bar stands 3.6 mm proud of the back glass. A one-piece case printed
 back-down needs either support under a raised collar or a flat back about 4 mm
 thick. That second option is the common one, and it makes the phone 14–15 mm
-thick and moves a wireless charger 4 mm away. Two parts avoid both. The plate
-prints face-up, so its collar grows straight up with no support, and it is
-1.7 mm thick, so Qi charging still works. The plate isn't bonded to the TPU:
-the bumper's rim closes over the plate's 45° beveled edge, and the phone holds
-it there. Either part can be reprinted on its own.
+thick and moves a wireless charger 4 mm away. Versions 1 and 2 avoided both
+with two parts. The plate printed face-up, so its collar grew straight up with
+no support, and it was 1.7 mm thick. It isn't bonded to the TPU: the bumper's
+rim closes over the plate's 45° beveled edge, and the phone holds it there.
+
+<table>
+  <tr>
+    <td width="50%"><img src="out/renders/stream_back_petg.jpg" alt="Version 2 from the back"></td>
+    <td width="50%"><img src="out/renders/stream_wake_closeup.jpg" alt="Version 2's beads in raking light"></td>
+  </tr>
+  <tr>
+    <td>Version 2 from the back. Its plate printed face-up, so the beads stand out as a texture.</td>
+    <td>Version 2's beads in raking light, rolled up into vortices.</td>
+  </tr>
+</table>
 
 | Feature | Value | Why |
 |---|---|---|
@@ -282,28 +331,33 @@ band of 10⁻⁶ and divergence of 2 × 10⁻⁵:
 
 ### Splicing it into the G-code
 
-PrusaSlicer slices the plate with layer-range modifiers: a hidden base in
-0.25 mm layers, a 0.45 mm layer at z = 1.7 mm, and the collar in 0.15 mm
-layers above. The build replaces that one layer with the flow toolpaths, between
-two color changes (M600). Each line sets its own feed rate, up to 30 mm/s but
-slow enough that it never pushes more than 5 mm³/s; travel moves retract and
-lift, and the slicer's retraction state is restored at the end. A checker reads
-the result back:
+In version 3 the streamline layer is the print's first layer. PrusaSlicer slices
+the case with a 0.45 mm first layer. The build keeps its purge line and 5 mm
+brim, in black PETG, and replaces the rest of that layer with the flow
+toolpaths, between two color changes (M600). Each line sets its own feed rate,
+up to 20 mm/s but slow enough that it never pushes more than 5 mm³/s. Travel
+moves run at 60 mm/s, retract and lift, and at the end the block hands back
+the retraction state the slicer expects. A checker reads the result back:
 
-- 25,729 extrusions, all at z = 1.7 mm and 12–30 mm/s, all inside the window
-- no travel longer than 1 mm without a lift
-- 780 lines, 15.6 m of path and 1714 mm of filament, in about 27 minutes
+- 29,882 extrusions, all at z = 0.45 mm and 12–20 mm/s, all inside the back's outline
+- 904 travels, none longer than 1 mm without a lift
+- 903 lines, 18.4 m of path and 2007 mm of filament, in about 37 minutes
+
+Version 2 spliced the same kind of layer into its plate, at z = 1.7 mm on a
+hidden base in 0.25 mm layers, with the collar in 0.15 mm layers above.
 
 The layer was 0.25 mm thick at first. That made the colored pieces short (the
 smallest was 10 mm) and the colors thin over the black base. At 0.45 mm, about
 the tallest bead a 0.6 mm nozzle lays well (Prusa's own profiles stop at
 0.40 mm), every piece is 1.8 times longer and lasts about 1.7 times longer in
-the extruder, the colors are more opaque, and the beads stand out as a texture.
+the extruder, and the colors are more opaque. On version 2's face-up plate the
+beads also stood out as a texture. Version 3's layer faces the bed, so its face
+is flat and takes on the sheet's finish.
 
 <table>
   <tr>
-    <td width="35%"><img src="docs/img/process/splice_check.jpg" alt="The spliced layer inside the slicer's perimeters"></td>
-    <td width="65%"><img src="out/renders/streamline_colors.png" alt="Predicted colors for the PETG and PLA palettes"></td>
+    <td width="50%"><img src="docs/img/process/splice_check.jpg" alt="The spliced layer inside the slicer's perimeters"></td>
+    <td width="50%"><img src="out/renders/streamline_colors.png" alt="Predicted colors for the PETG palette"></td>
   </tr>
   <tr>
     <td>Alignment check, from the first version: the spliced layer (blue) sits inside the slicer's perimeters (red).</td>
@@ -352,9 +406,92 @@ very tight. Both showed where the design fought the printer:
 
 ## Print it
 
-Everything is in `out/print/`. The `.3mf` files are PrusaSlicer projects with
-all settings included. The times are PrusaSlicer 2.9.6 estimates for an
-Original Prusa MK3S+ with a 0.6 mm nozzle.
+Everything is in `out/print/`. The times are PrusaSlicer 2.9.6 estimates for an
+Original Prusa MK3S+ with a 0.6 mm nozzle, with the hand-fed layer's own
+estimate in place of the slicer's first layer.
+
+| File | Material | Time | Filament | Notes |
+|---|---|---|---|---|
+| `case_streamlines_petg.gcode` | PETG, then TPU | about 3 h 5 min | 18 g PETG, 7 g TPU | The case, streamline layer included (G-code, not a project; see below) |
+| `camera_ring_petg.3mf` | PETG | 16 min | 2 g | The camera ring, in black PETG |
+| `case_fused.3mf` | PETG, then TPU | | | The case as a PrusaSlicer project, to inspect or slice again (with a plain first layer) |
+
+Plain STLs of the back and the ring sit next to them. The textured walls travel
+inside `case_fused.3mf`, and the build also writes them as
+`case_walls_tpu.stl`. The settings are also in `out/profiles/*.ini` (File >
+Import > Import Config).
+
+**The case** is one job with three stops:
+
+1. Load black PETG (Galaxy Black, for the sparkle) and turn the filament sensor
+   off (Settings > Fil. sensor > Off). It would read each gap between pieces as
+   a run-out. Leave it off for the TPU as well.
+2. The printer lays a purge line and a 5 mm brim, then stops for a color
+   change. Load the first piece, let it purge clean, and confirm.
+3. Keep feeding: as the tail of each piece reaches the extruder, push the next
+   one in behind it, end to end. Cut the ends square.
+4. At the second stop, load black PETG for the rest of the back.
+5. At the third stop, at 1.29 mm, unload the PETG and load dry TPU. The first
+   three TPU layers print at 250 °C with the fan off; then the nozzle drops to
+   235 °C and the bed to 60 °C.
+6. Let the case cool on the sheet before you take it off.
+
+The cut list, with the length and color of each piece, is in
+[`out/REPORT.md`](out/REPORT.md). Add about 30 mm to the first piece for the
+purge and 80 mm to the last so the extruder can still grip it. To check the
+G-code first, open it in PrusaSlicer's G-code viewer.
+
+**The camera ring** prints flange down from `camera_ring_petg.3mf`, in black
+PETG.
+
+**Assembly.** Drop the ring into the case from the inside, collar first, so the
+collar comes out through the opening in the back and the flange sits flat in its
+recess. Then press the phone in, bottom end first, and ease the top corners
+under the lips. To take it off, push the phone out through the front from the
+camera opening.
+
+**Which sheet.** The back's visible face is the side on the bed, so it takes on
+the sheet's finish. A textured or satin PEI sheet gives a matte face that hides
+small flaws, and PETG lets go of it once the sheet cools. Smooth PEI gives a
+glossy face, but PETG can bond to it hard enough to tear the surface: wipe on a
+thin layer of glue stick first, as a release layer.
+
+<details>
+<summary><b>Settings and tips</b></summary>
+
+- **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile, with a 0.6 mm
+  hardened-steel nozzle.
+- **Two materials, one nozzle**: PrusaSlicer's single-extruder multi-material
+  mode with two filaments, no wipe tower, and M600 as the tool change. The
+  build strips the `T0`/`T1` lines PrusaSlicer still writes, which an MK3S
+  without an MMU doesn't need. In PrusaSlicer's GUI the project shows as a
+  two-extruder printer.
+- **Layers**: a 0.45 mm first layer, then 0.12 mm for both materials.
+  PrusaSlicer refuses organic supports with per-height layer ranges, so one
+  height serves the PETG back and the TPU walls.
+- **Ironing**: on all top surfaces, at 0.2 mm spacing. Most of it is the
+  cavity floor under the phone, about 45 minutes. To save that time, set
+  `ironing_type` to `topmost`, or turn ironing off. Ironing TPU can leave
+  material on the nozzle; watch the first lip.
+- **PETG back** (`Prusament PETG @0.6 nozzle`): 250 °C, bed 85 °C and then
+  90 °C. The streamline layer prints at up to 20 mm/s, capped at 5 mm³/s, with
+  travel at 60 mm/s.
+- **TPU walls** (based on Prusa's `Ultrafuse TPU-95A` preset): 250 °C and no
+  fan for the first three layers, then 235 °C, flow capped at 1.8 mm³/s, 0.8 mm
+  retraction at 25 mm/s and no z-hop, extrusion multiplier 1.05. Dry the
+  filament first (about 50 °C for 4–6 h). If your TPU is softer than 95A, lower
+  `filament_max_volumetric_speed` to 1.2.
+- **Supports**: organic, only where enforcers are painted. The build paints
+  none, since no face needs one.
+- Leave an enclosure open or vented for the TPU: a warm enclosure can cause
+  heat creep.
+
+</details>
+
+<details>
+<summary><b>Version 2: the two-part case</b></summary>
+
+`python -m case.build --style clamped` rebuilds these files.
 
 | File | Material | Time | Filament | Notes |
 |---|---|---|---|---|
@@ -383,13 +520,11 @@ Import > Import Config).
 5. At the second color change, load black again for the collar, and turn the
    sensor back on.
 
-The cut list, with the length and color of each piece, is in
+A build with `--style clamped` writes the plate's cut list to
 [`out/REPORT.md`](out/REPORT.md). Add about 30 mm to the first piece for the
-purge and 80 mm to the last so the extruder can still grip it. To check the
-G-code first, open it in PrusaSlicer's G-code viewer.
+purge and 80 mm to the last so the extruder can still grip it.
 
-<details>
-<summary><b>Settings and tips</b></summary>
+**Settings and tips (version 2)**
 
 - **Printer**: Prusa's `MK3S & MK3S+ 0.6 nozzle` profile, with a 0.6 mm
   hardened-steel nozzle.
@@ -416,8 +551,6 @@ G-code first, open it in PrusaSlicer's G-code viewer.
 - **No supports** on either part. Leave an enclosure open or vented: neither
   material needs the heat, and a warm enclosure can cause heat creep with TPU.
 
-</details>
-
 **Which face is the front.** Without the plate, the bumper looks much the same
 from both sides. The front is the face that printed on the bed: smooth, with a
 narrow lip. The back has the rim and the pill-shaped window around the camera
@@ -431,6 +564,8 @@ side). Press the phone in the same way, bottom end first, then ease the lip over
 the top corners. To take it off, push the phone out through the front from the
 camera window.
 
+</details>
+
 ## Build it
 
 ```bash
@@ -440,7 +575,8 @@ uv sync --extra gpu            # optional: an NVIDIA GPU, for new flow simulatio
 ```
 
 - `--no-slice` skips PrusaSlicer and the streamline layer, and `--no-render`
-  skips the renders.
+  skips the renders. `--style clamped` builds version 2, the bumper and plate,
+  instead of the one-piece case.
 - The build finds PrusaSlicer on the PATH or as a Flatpak. If yours lives
   elsewhere, set `PRUSASLICER` to its command and `PRUSASLICER_PROFILES` to its
   `PrusaResearch.ini`.
@@ -454,8 +590,16 @@ uv sync --extra gpu            # optional: an NVIDIA GPU, for new flow simulatio
 All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 `Case` for the case. Some useful ones:
 
-- `Case.fit`, `Case.fit_rigid`: side clearance for the TPU and the PETG bumper.
-  Raise one by 0.05 if that bumper is too tight.
+- `Case.style`: `"fused"` (version 3, the default) or `"clamped"` (version 2).
+- `Case.fit`: side clearance. Raise it by 0.05 if the case is too tight.
+  `Case.fit_rigid` is the same for version 2's PETG bumper.
+- `Case.back_layers`, `back_layer`: the black PETG layers above the streamline
+  layer. `Case.flush_ramp`: the length of the ramps from the flush edges up to
+  the lips. `Case.top_chamfer`, `base_chamfer`: the outer edges.
+- `Case.ring_clear`, `ring_flange`, `ring_flange_t`: the camera ring's
+  clearance in the back's opening, and its flange.
+- `Case.stream_speed`, `stream_travel`, `stream_flow`: how fast the hand-fed
+  layer prints and travels, and its flow cap.
 - `Case.btn_notch`: open button notch (default) or closed windows.
   `Case.grip_style`: `"flow"` (the back's flow over the edges) or the old
   `"flutes"`; `grip_sep` sets the groove spacing.
@@ -469,13 +613,17 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
   `grand-canyon`), any `"lat,lon,width_km"`, or `"procedural:<seed>"`.
 - `Case.lip_h`, `lip_side`, `lip_end`, `outer_corner_r`, `corner_relief_r`,
   `grip`: lips, corners and grip flutes.
+- `Case.design` and the `topo_*` and `flow_*` options shape version 2's plate;
+  version 3 always prints the streamline layer.
 
 ## Code map
 
 | File | Contents |
 |---|---|
 | `case/params.py` | every dimension, with sources and ranges |
-| `case/phone.py`, `bumper.py`, `plate.py` | the phone model, the bumper, the back plate and collar |
+| `case/shell.py` | version 3: the one-piece case, split into PETG back and TPU walls, and the camera ring |
+| `case/fused.py` | version 3's print: meshes, painted supports, the two-material project, the first-layer splice |
+| `case/phone.py`, `bumper.py`, `plate.py` | the phone model; version 2's bumper and back plate with its collar |
 | `case/texture.py` | the grip texture: the back's flow carried over the edges, cut into the bumper's print mesh |
 | `case/lbm.py`, `lbm_gpu.py`, `streamflow.py` | lattice-Boltzmann flow and dye past the collar (CPU and GPU) |
 | `case/spectra.py` | the spectral health check |
@@ -483,7 +631,8 @@ All dimensions are named parameters in `case/params.py`: `Phone` for the phone,
 | `case/toolpath.py`, `streamplate.py` | relaxation, bead widths, gap fill, color mixing and the G-code splice |
 | `case/streamtrace.py` | evenly spaced instantaneous streamlines (the `streamlines` source) |
 | `case/flow.py`, `topo.py` | the Kármán and topographic designs |
-| `case/slicer.py` | PrusaSlicer presets (flattened from Prusa's bundle) and projects |
+| `case/slicer.py` | PrusaSlicer presets (flattened from Prusa's bundle), projects, two-material configs |
+| `case/profiles.py` | print settings on top of Prusa's presets, for every part |
 | `case/build.py` | builds every output |
 | `case/figures.py`, `render.py`, `sections.py` | renders and cross-sections (software OpenGL) |
 
