@@ -96,7 +96,7 @@ back-down needs either support under a raised collar or a flat back about 4 mm
 thick. That second option is the common one, and it makes the phone 14–15 mm
 thick and moves a wireless charger 4 mm away. Two parts avoid both. The plate
 prints face-up, so its collar grows straight up with no support, and it is
-1.5 mm thick, so Qi charging still works. The plate isn't bonded to the TPU:
+1.7 mm thick, so Qi charging still works. The plate isn't bonded to the TPU:
 the bumper's rim closes over the plate's 45° beveled edge, and the phone holds
 it there. Either part can be reprinted on its own.
 
@@ -106,7 +106,7 @@ it there. Either part can be reprinted on its own.
 | Corners | 2.4 mm TPU plus a 1.3 mm air pocket | a corner hit compresses TPU into the pocket before it reaches the glass |
 | Front lip | 1.4 mm above the screen | face-down falls and slides land on the lip, not the glass |
 | Long-side lips | 45° bevel, 0.5 mm high at the inner edge | room for edge-swipe gestures |
-| Rear rim | 0.6 mm proud of the plate | protects the plate edge and the glass corners |
+| Rear rim | 0.6 mm proud of the plate, 0.15 mm above the streamline beads | protects the plate edge and the glass corners |
 | Camera collar | 1.0 mm above the camera bar | the phone can lie on its back; the inner top edge is beveled against flash glare |
 | Buttons | one notch over power and volume, open at the back | a closed window's back edge prints as a long, saggy bridge |
 | Grip | the back's flow, continued over the edges: grooves along its streaklines, 0.35 mm deep | something to hold, from the same simulation as the back |
@@ -283,15 +283,22 @@ band of 10⁻⁶ and divergence of 2 × 10⁻⁵:
 ### Splicing it into the G-code
 
 PrusaSlicer slices the plate with layer-range modifiers: a hidden base in
-0.25 mm layers, a 0.25 mm layer at z = 1.5 mm, and the collar in 0.15 mm
+0.25 mm layers, a 0.45 mm layer at z = 1.7 mm, and the collar in 0.15 mm
 layers above. The build replaces that one layer with the flow toolpaths, between
-two color changes (M600). Each extrusion sets its own feed rate, travel moves
-retract and lift, and the slicer's retraction state is restored at the end. A
-checker reads the result back:
+two color changes (M600). Each line sets its own feed rate, up to 30 mm/s but
+slow enough that it never pushes more than 5 mm³/s; travel moves retract and
+lift, and the slicer's retraction state is restored at the end. A checker reads
+the result back:
 
-- 25,789 extrusions, all at 1800 mm/min and z = 1.5 mm, all inside the window
+- 25,729 extrusions, all at z = 1.7 mm and 12–30 mm/s, all inside the window
 - no travel longer than 1 mm without a lift
-- 793 lines, 15.7 m of path and 956 mm of filament, in about 16 minutes
+- 780 lines, 15.6 m of path and 1714 mm of filament, in about 27 minutes
+
+The layer was 0.25 mm thick at first. That made the colored pieces short (the
+smallest was 10 mm) and the colors thin over the black base. At 0.45 mm, about
+the tallest bead a 0.6 mm nozzle lays well (Prusa's own profiles stop at
+0.40 mm), every piece is 1.8 times longer and lasts about 1.7 times longer in
+the extruder, the colors are more opaque, and the beads stand out as a texture.
 
 <table>
   <tr>
@@ -355,8 +362,8 @@ Original Prusa MK3S+ with a 0.6 mm nozzle.
 | `bumper_petg.3mf` | PETG | 1 h 35 min | 12 g | The bumper in PETG: stiffer, 0.1 mm roomier on each side |
 | `test_fit_band_tpu.3mf` | TPU | 50 min | 6 g | Optional: the front 6 mm of the bumper, to check outline, corners, lip and openings |
 | `test_camera_petg.3mf` | PETG | 18 min | 4 g | Optional: the top of the plate, to check the camera collar |
-| `plate_streamlines_petg.gcode` | PETG | 1 h | 21 g | The plate with the streamline layer (G-code, not a project; see below) |
-| `plate_streamlines_pla.gcode` | PLA | 1 h | 21 g | The same in PLA for the brighter palette |
+| `plate_streamlines_petg.gcode` | PETG | 1 h 10 min | 23 g | The plate with the streamline layer (G-code, not a project; see below) |
+| `plate_streamlines_pla.gcode` | PLA | 1 h 10 min | 23 g | The same in PLA for the brighter palette |
 | `plate_petg.3mf` | PETG | 45 min | 18 g | A plain flat plate, without the streamline layer |
 
 Plain STLs of the plate and the test pieces sit next to the projects. The
@@ -369,7 +376,7 @@ Import > Import Config).
 1. Start `plate_streamlines_petg.gcode` with black or Galaxy Black PETG loaded.
 2. Before the color change, turn the filament sensor off (Settings > Fil.
    sensor > Off). It would read each gap between pieces as a run-out.
-3. About 38 min in, at 1.5 mm, the printer stops for a color change. Load the
+3. About 38 min in, at 1.7 mm, the printer stops for a color change. Load the
    first piece, let it purge clean, and confirm.
 4. Keep feeding: as the tail of each piece reaches the extruder, push the next
    one in behind it, end to end. Cut the ends square.
@@ -399,9 +406,10 @@ G-code first, open it in PrusaSlicer's G-code viewer.
   is softer than 95A, lower `filament_max_volumetric_speed` to 1.2.
 - **PETG bumper** (`Prusament PETG @0.6 nozzle`): 240 °C, solid infill, 0.8 mm
   retraction with wipe, 0.2 mm z-hop, and up to 90% fan on overhangs.
-- **PETG plate**: 250 °C for its faster 0.25 mm layers. The layer heights are
-  layer-range modifiers in the project, so you can edit them in the GUI. No
-  ironing: it would flatten the streamline beads.
+- **PETG plate**: 250 °C for its faster 0.25 mm base layers. The streamline
+  layer is 0.45 mm tall and capped at 5 mm³/s, so it takes about 27 minutes.
+  The layer heights are layer-range modifiers in the project, so you can edit
+  them in the GUI. No ironing: it would flatten the streamline beads.
 - **Sheet**: TPU and PETG both stick hard to smooth PEI. Use glue stick as a
   release layer, or a textured sheet. The bumper prints lip-down, and the plate
   prints inner face down.

@@ -266,6 +266,7 @@ class Machine:
     z_f: float = 720
     print_f: float = 1800  # 30 mm/s: slow enough for neat, glossy lines
     min_travel_retract: float = 1.0
+    max_flow: float = 0.0  # mm^3/s; > 0 slows each line so its widest segment stays under it
 
     @classmethod
     def from_config(cls, cfg: dict) -> "Machine":
@@ -277,6 +278,17 @@ class Machine:
                    lift=float(fl) if fl not in ("nil", "") else g("retract_lift", 0.4),
                    travel_f=g("travel_speed", 180) * 60, z_f=g("travel_speed_z", 12) * 60 or 720,
                    min_travel_retract=g("retract_before_travel", 1))
+
+
+def line_feed(pts: np.ndarray, es: np.ndarray, m: Machine) -> float:
+    """Feedrate (mm/min) for one line: print_f, or slower if the line's widest segment would
+    push more than m.max_flow. One speed per line keeps its sheen even."""
+    if m.max_flow <= 0:
+        return m.print_f
+    seg = np.hypot(*np.diff(pts, axis=0).T)
+    ok = seg > 1e-6
+    area = float(np.max(np.asarray(es)[ok] * A_FIL / seg[ok])) if ok.any() else 0.0  # bead cross-section, mm^2
+    return min(m.print_f, 60 * m.max_flow / area) if area > 0 else m.print_f
 
 
 def gcode_block(layer: Layer, to_bed, m: Machine, retracted: float, start_xy: tuple[float, float],
@@ -314,7 +326,7 @@ def gcode_block(layer: Layer, to_bed, m: Machine, retracted: float, start_xy: tu
             if change_before:
                 out += [f";COLOR_CHANGE,T0,{color}", "M600", "G1 E0.4 ; prime after color change"]
             out += [";TYPE:Top solid infill", f";WIDTH:{width:.4f}", f";HEIGHT:{layer.h:g}"]
-        out.append(f"G1 F{m.print_f:.0f}")  # every line: travel and deretract moves leave their own feedrate
+        out.append(f"G1 F{line_feed(pts, es, m):.0f}")  # every line: travel and deretract moves leave their own feedrate
         for (bx, by), e in zip(pts[1:], es):
             out.append(f"G1 X{bx:.3f} Y{by:.3f} E{e:.5f}")
         x, y = pts[-1]

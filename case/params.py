@@ -141,8 +141,11 @@ class Case:
     # Streamline top layer (see case/lbm.py for the flow, case/toolpath.py for the G-code)
     stream_source: str = "dye"  # "dye": contours of the dye label (streaklines); "streamlines": instantaneous
     dye_smooth: float = 1.2  # smooth the dye label at this scale (mm) before contouring: the print's resolution
-    stream_h: float = 0.25  # the streamline layer's height (thicker = richer colour)
-    stream_sep: float = 0.55  # line spacing; 0.6 mm wide lines at 0.25 mm layers
+    stream_h: float = 0.45  # the streamline layer's height: thicker = more opaque colour, deeper bead texture and
+    #   longer pieces to feed. 0.45 is 75% of the 0.6 mm nozzle (Prusa's own profiles stop at 0.40); taller beads
+    #   are barely pressed onto the layer below. The rim stands plate_t + flange_proud - stream_h = 0.15 mm proud.
+    stream_sep: float = 0.55  # line spacing; 0.65 mm wide lines at 0.45 mm layers
+    stream_flow: float = 5.0  # mm^3/s cap on the streamline layer: tall, wide lines slow down (and pieces last longer)
     stream_phase: int = 8  # which of the 16 snapshots over one shedding period
     stream_bands: int = 12  # colour pieces in the cut list (equal stream-function ranges)
     base_layer: float = 0.25  # plate layers under the streamline layer (hidden, so thick)

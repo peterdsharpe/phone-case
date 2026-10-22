@@ -200,7 +200,8 @@ def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "pe
     if not spectra.healthy(health):
         raise RuntimeError("the flow snapshot fails the spectral check (grid-scale instability): "
                            f"{spectra.describe(health)}. Pick another Case.stream_phase or fix the solver.")
-    spec = dict(spec, overrides=dict(spec["overrides"], first_layer_height=c.base_layer))
+    spec = dict(spec, overrides=dict(spec["overrides"], first_layer_height=c.base_layer,
+                                     max_layer_height=max(0.40, c.stream_h)))  # the slot for the streamline layer
     n_base = round(c.plate_t / c.base_layer)
     assert abs(n_base * c.base_layer - c.plate_t) < 1e-6, "plate_t must be a whole number of base layers"
     z_top = round(c.plate_t + c.stream_h, 4)
@@ -211,7 +212,8 @@ def streamline_plate(p: Phone, c: Case, region, spec: dict, note, tag: str = "pe
     lyr = streamplate.layer(p, c, region, em=em)
     to_bed = streamplate.bed_transform(OUT / "print" / "plate.stl")
     out = OUT / "print" / f"plate_streamlines_{tag}.gcode"
-    info = toolpath.splice(OUT / "gcode" / f"plate_{tag}.gcode", out, lyr, to_bed, toolpath.Machine.from_config(cfg))
+    m = dataclasses.replace(toolpath.Machine.from_config(cfg), max_flow=c.stream_flow)
+    info = toolpath.splice(OUT / "gcode" / f"plate_{tag}.gcode", out, lyr, to_bed, m)
     length = sum(float(np.hypot(*np.diff(l, axis=0).T).sum()) for l in lyr.lines)
     cov = streamplate.coverage(lyr, region.buffer(-0.3))
     bands = toolpath.bands(lyr, c.stream_bands)
